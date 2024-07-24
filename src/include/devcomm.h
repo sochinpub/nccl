@@ -31,7 +31,7 @@ extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 extern const char* ncclProtoStr[NCCL_NUM_PROTOCOLS];
 
 #define NCCL_MAX_OPS 2048
-#define NCCL_STEPS 8
+#define NCCL_STEPS 8                // Sochin: what is this ???
 
 union ncclLLFifoLine {
   /* Flags have to be *after* data, because otherwise, an incomplete receive
@@ -355,7 +355,7 @@ __host__ __device__ constexpr int ncclNvlsUnroll(int bytePerPack, int cudaArch =
 }
 
 // The amount of dynamic shmem per warp
-__host__ __device__ constexpr int ncclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH) {
+__host__ __device__ constexpr int ncclShmemScratchWarpSize(int cudaArch = NCCL_CUDA_ARCH) { // 每个warp可以使用的动态共享内存数量
   return (max_constexpr<int>(
       /*LL    */0,
       /*LL128 */(NCCL_LL128_SHMEM_ELEMS_PER_THREAD*WARP_SIZE)*sizeof(uint64_t),

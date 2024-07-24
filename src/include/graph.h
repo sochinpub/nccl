@@ -69,7 +69,7 @@ ncclResult_t ncclTopoSearchInit(struct ncclTopoSystem* system);
 #define NCCL_TOPO_PATTERN_TREE 3            // All NIC traffic going to/from the same GPU
 #define NCCL_TOPO_PATTERN_RING 4            // Ring
 #define NCCL_TOPO_PATTERN_NVLS 5            // NVLS+SHARP and NVLS+Tree
-struct ncclTopoGraph {
+struct ncclTopoGraph { // 拓扑图
   // Input / output
   int id; // ring : 0, tree : 1, collnet : 2
   int pattern;
@@ -86,15 +86,15 @@ struct ncclTopoGraph {
   int typeInter;
   int sameChannels;
   int nHops;
-  int intra[MAXCHANNELS*NCCL_TOPO_MAX_NODES];
-  int inter[MAXCHANNELS*2];
+  int intra[MAXCHANNELS*NCCL_TOPO_MAX_NODES]; // 节点内
+  int inter[MAXCHANNELS*2];                   // 节点间
 };
 ncclResult_t ncclTopoCompute(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 
 ncclResult_t ncclTopoPrintGraph(struct ncclTopoSystem* system, struct ncclTopoGraph* graph);
 ncclResult_t ncclTopoDumpGraphs(struct ncclTopoSystem* system, int ngraphs, struct ncclTopoGraph** graphs);
 
-struct ncclTopoRanks {
+struct ncclTopoRanks {          // 
   int ringRecv[MAXCHANNELS];
   int ringSend[MAXCHANNELS];
   int ringPrev[MAXCHANNELS];

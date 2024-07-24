@@ -32,10 +32,10 @@ int ncclIsCuMemSupported() {
   if (CUPFN(cuMemCreate) == NULL) return 0;
   CUCHECKGOTO(cuDeviceGet(&currentDev, cudaDev), ret, error);
   // Query device to see if CUMEM VMM support is available
-  CUCHECKGOTO(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, currentDev), ret, error);
+  CUCHECKGOTO(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, currentDev), ret, error); // cuMem 支持
   if (!flag) return 0;
   // Query device to see if CUMEM RDMA support is available
-  CUCHECKGOTO(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, currentDev), ret, error);
+  CUCHECKGOTO(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED, currentDev), ret, error); // gdr 支持
   if (!flag) return 0;
 error:
   return (ret == ncclSuccess);
@@ -43,14 +43,14 @@ error:
 }
 
 int ncclCuMemEnable() {
-  return ((ncclParamCuMemEnable() == -2 && ncclCuMemSupported) || ncclParamCuMemEnable());
+  return ((ncclParamCuMemEnable() == -2 && ncclCuMemSupported) || ncclParamCuMemEnable()); // 如果用户使能了cumem
 }
-
+// 定义函数指针
 #define DECLARE_CUDA_PFN(symbol,version) PFN_##symbol##_v##version pfn_##symbol = nullptr
 
 #if CUDART_VERSION >= 11030
 /* CUDA Driver functions loaded with cuGetProcAddress for versioning */
-DECLARE_CUDA_PFN(cuDeviceGet, 2000);
+DECLARE_CUDA_PFN(cuDeviceGet, 2000);                // PFN_cuDeviceGet_v2000 pfn_cuDeviceGet;
 DECLARE_CUDA_PFN(cuDeviceGetAttribute, 2000);
 DECLARE_CUDA_PFN(cuGetErrorString, 6000);
 DECLARE_CUDA_PFN(cuGetErrorName, 6000);
@@ -106,7 +106,7 @@ bool ncclCudaLaunchBlocking = false;
  */
 static ncclResult_t cudaPfnFuncLoader(void) {
   CUresult res;
-
+// 加载符号
 #define LOAD_SYM(symbol, version, ignore) do {                           \
     res = pfn_cuGetProcAddress(#symbol, (void **) (&pfn_##symbol), version, 0); \
     if (res != 0) {                                                     \
@@ -167,14 +167,14 @@ static void initOnceFunc() {
    * Load CUDA driver library
    */
   char path[1024];
-  char *ncclCudaPath = getenv("NCCL_CUDA_PATH");
+  char *ncclCudaPath = getenv("NCCL_CUDA_PATH");        // 手动设置的cuda path
   if (ncclCudaPath == NULL)
     snprintf(path, 1024, "%s", "libcuda.so");
   else
     snprintf(path, 1024, "%s/%s", ncclCudaPath, "libcuda.so");
 
   (void) dlerror(); // Clear any previous errors
-  cudaLib = dlopen(path, RTLD_LAZY);
+  cudaLib = dlopen(path, RTLD_LAZY);            // 打开libcuda.so
   if (cudaLib == NULL) {
     WARN("Failed to find CUDA library %s (NCCL_CUDA_PATH='%s') : %s", path, ncclCudaPath ? ncclCudaPath : "", dlerror());
     goto error;
@@ -183,13 +183,13 @@ static void initOnceFunc() {
   /*
    * Load initial CUDA functions
    */
-
+  // 1) 执行cuInit
   pfn_cuInit = (PFN_cuInit_v2000) dlsym(cudaLib, "cuInit");
   if (pfn_cuInit == NULL) {
     WARN("Failed to load CUDA missing symbol cuInit");
     goto error;
   }
-
+  // 2) cuDriverGetVersion
   pfn_cuDriverGetVersion = (PFN_cuDriverGetVersion_v2020) dlsym(cudaLib, "cuDriverGetVersion");
   if (pfn_cuDriverGetVersion == NULL) {
     WARN("Failed to load CUDA missing symbol cuDriverGetVersion");
@@ -210,7 +210,7 @@ static void initOnceFunc() {
     // Silently ignore version check mismatch for backwards compatibility
     goto error;
   }
-
+  // 3) cuGetProcAddress
   pfn_cuGetProcAddress = (PFN_cuGetProcAddress_v11030) dlsym(cudaLib, "cuGetProcAddress");
   if (pfn_cuGetProcAddress == NULL) {
     WARN("Failed to load CUDA missing symbol cuGetProcAddress");
@@ -222,10 +222,11 @@ static void initOnceFunc() {
    * Multiple calls of cuInit() will return immediately
    * without making any relevant change
    */
+  // 1) cuInit
   pfn_cuInit(0);
 
   #if CUDART_VERSION >= 11030
-  if (cudaPfnFuncLoader()) {
+  if (cudaPfnFuncLoader()) { // 加载cuda 函数
     WARN("CUDA some PFN functions not found in the library");
     goto error;
   }
@@ -241,7 +242,7 @@ error:
   return;
 }
 
-ncclResult_t ncclCudaLibraryInit() {
+ncclResult_t ncclCudaLibraryInit() { // cuda初始化
   pthread_once(&initOnceControl, initOnceFunc);
   return initResult;
 }

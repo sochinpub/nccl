@@ -18,11 +18,11 @@
 #include <pwd.h>
 
 const char* userHomeDir() {
-  struct passwd *pwUser = getpwuid(getuid());
+  struct passwd *pwUser = getpwuid(getuid()); // 当前目录的家目录
   return pwUser == NULL ? NULL : pwUser->pw_dir;
 }
 
-void setEnvFile(const char* fileName) {
+void setEnvFile(const char* fileName) { // 读取环境变量文件， 并设置环境变量
   FILE * file = fopen(fileName, "r");
   if (file == NULL) return;
 
@@ -48,10 +48,10 @@ void setEnvFile(const char* fileName) {
   fclose(file);
 }
 
-void initEnv() {
+void initEnv() { // 初始化环境变量
   char confFilePath[1024];
   const char * userDir = userHomeDir();
-  if (userDir) {
+  if (userDir) { // nccl的环境变量配置文件
     sprintf(confFilePath, "%s/.nccl.conf", userDir);
     setEnvFile(confFilePath);
   }
@@ -59,7 +59,7 @@ void initEnv() {
   setEnvFile(confFilePath);
 }
 
-void ncclLoadParam(char const* env, int64_t deftVal, int64_t uninitialized, int64_t* cache) {
+void ncclLoadParam(char const* env, int64_t deftVal, int64_t uninitialized, int64_t* cache) { // NCCL从环境变量得到的参数
   static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_lock(&mutex);
   if (__atomic_load_n(cache, __ATOMIC_RELAXED) == uninitialized) {

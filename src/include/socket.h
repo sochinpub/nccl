@@ -24,10 +24,10 @@
 #define NCCL_SOCKET_MAGIC 0x564ab9f2fc4b9d6cULL
 
 /* Common socket address storage structure for IPv4/IPv6 */
-union ncclSocketAddress {
-  struct sockaddr sa;
-  struct sockaddr_in sin;
-  struct sockaddr_in6 sin6;
+union ncclSocketAddress { // 支持unix/tcp socket
+  struct sockaddr sa;       // 16字节
+  struct sockaddr_in sin;   // 16字节
+  struct sockaddr_in6 sin6; // 28字节
 };
 
 enum ncclSocketState {
@@ -52,12 +52,12 @@ enum ncclSocketType {
   ncclSocketTypeNetIb = 4
 };
 
-struct ncclSocket {
+struct ncclSocket { // 抽象的nccl socket
   int fd;
   int acceptFd;
   int timedOutRetries;
   int refusedRetries;
-  union ncclSocketAddress addr;
+  union ncclSocketAddress addr; // Socket地址
   volatile uint32_t* abortFlag;
   int asyncFlag;
   enum ncclSocketState state;
@@ -65,7 +65,7 @@ struct ncclSocket {
   uint64_t magic;
   enum ncclSocketType type;
 };
-
+// Socket的抽象接口
 const char *ncclSocketToString(union ncclSocketAddress *addr, char *buf, const int numericHostForm = 1);
 ncclResult_t ncclSocketGetAddrFromString(union ncclSocketAddress* ua, const char* ip_port_pair);
 int ncclFindInterfaceMatchSubnet(char* ifNames, union ncclSocketAddress* localAddrs, union ncclSocketAddress* remoteAddr, int ifNameMaxSize, int maxIfs);

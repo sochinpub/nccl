@@ -11,30 +11,31 @@
 #include "channel.h"
 #include <assert.h>
 
+// 线程局部的存储
 __thread int ncclGroupDepth = 0; // depth of ncclGroupStart nesting
 __thread ncclResult_t ncclGroupError = ncclSuccess;
 __thread struct ncclComm* ncclGroupCommHead = nullptr;
 __thread struct ncclComm* ncclGroupCommPreconnectHead = nullptr;
-__thread struct ncclIntruQueue<struct ncclAsyncJob, &ncclAsyncJob::next> ncclAsyncJobs;
-__thread struct ncclGroupJob *ncclGroupJobMainPtr = NULL;
-__thread struct ncclGroupJob ncclGroupJobMain;
-__thread int ncclGroupBlocking = -1; /* default mode */
-__thread bool ncclGroupJobAbortFlag = false;
+__thread struct ncclIntruQueue<struct ncclAsyncJob, &ncclAsyncJob::next> ncclAsyncJobs; // 线程上下文的异步任务
+__thread struct ncclGroupJob *ncclGroupJobMainPtr = NULL;   // 线程局部的控制
+__thread struct ncclGroupJob ncclGroupJobMain;    // 主任务
+__thread int ncclGroupBlocking = -1;            /* default mode */
+__thread bool ncclGroupJobAbortFlag = false;    // group丢弃标志位
 
 void* ncclAsyncJobMain(void* arg);
 static ncclResult_t groupJobComplete(struct ncclGroupJob *job);
-
+// 异步任务拉起
 ncclResult_t ncclAsyncLaunch(
-    struct ncclAsyncJob* job,
-    ncclResult_t(*func)(struct ncclAsyncJob*),
-    void(*undo)(struct ncclAsyncJob*),
+    struct ncclAsyncJob* job,                   // 异步任务上下文
+    ncclResult_t(*func)(struct ncclAsyncJob*),  // 执行函数
+    void(*undo)(struct ncclAsyncJob*),          // undo异步任务
     void(*destructor)(void*), ncclComm_t comm
   ) {
   ncclResult_t ret = ncclSuccess;
 
   if (ncclGroupDepth == 0) {
-    ret = func(job);
-    if (ret != ncclSuccess && undo) undo(job);
+    ret = func(job);                                // 直接执行
+    if (ret != ncclSuccess && undo) undo(job);      // 失败undo
     if (destructor) destructor(job);
   } else {
     job->func = func;
@@ -45,22 +46,22 @@ ncclResult_t ncclAsyncLaunch(
     job->state = ncclGroupJobRunning;
     job->comm = comm;
     /* check if there are blocking and nonblocking comms at the same time in group. */
-    if (ncclGroupBlocking == -1) {
+    if (ncclGroupBlocking == -1) {  // 当前group的执行模式
       /* first met communicator */
       ncclGroupBlocking = comm->config.blocking;
     } else if (ncclGroupBlocking != comm->config.blocking) {
       WARN("Blocking and nonblocking communicators are not allowed in the same group.");
       ret = ncclInvalidArgument;
     }
-    ncclIntruQueueEnqueue(&ncclAsyncJobs, job);
+    ncclIntruQueueEnqueue(&ncclAsyncJobs, job); // 入队任务
   }
 
   return ret;
 }
 
-void* ncclAsyncJobMain(void* arg) {
+void* ncclAsyncJobMain(void* arg) { // 异步主任务执行
   struct ncclAsyncJob* job = (struct ncclAsyncJob*)arg;
-  job->result = job->func(job);
+  job->result = job->func(job);           // 执行
   if (job->result != ncclSuccess) {
     INFO(NCCL_INIT,"%s:%d -> %d [Async thread]", __FILE__, __LINE__, job->result);
   }
@@ -68,7 +69,7 @@ void* ncclAsyncJobMain(void* arg) {
   return arg;
 }
 
-ncclResult_t ncclAsyncJobComplete(struct ncclAsyncJob* job) {
+ncclResult_t ncclAsyncJobComplete(struct ncclAsyncJob* job) { // 等待异步线程结束
   ncclResult_t ret;
   SYSCHECK(pthread_join(job->thread, NULL), "pthread_join");
   if (job->result != ncclSuccess) {
@@ -246,13 +247,13 @@ static void groupCleanup(struct ncclComm** groupCommHeadPtr, struct ncclComm** g
   return;
 }
 
-static ncclResult_t groupLaunch(struct ncclAsyncJob *job_) {
+static ncclResult_t groupLaunch(struct ncclAsyncJob *job_) { // launch 异步任务
   int savedDev;
   ncclResult_t ret = ncclSuccess;
   bool jobsDone = false;
   bool errorJobAbortFlag = false;
   struct ncclGroupJob *gjob = (struct ncclGroupJob*) job_;
-  struct ncclComm *groupCommHeadMain = *gjob->groupCommHeadPtr;
+  struct ncclComm *groupCommHeadMain = *gjob->groupCommHeadPtr; // comm链头
   struct ncclComm *groupCommPreconnectHeadMain = *gjob->groupCommPreconnectHeadPtr;
   struct ncclIntruQueue<struct ncclAsyncJob, &ncclAsyncJob::next> *asyncJobsMain = gjob->asyncJobsPtr;
   volatile bool *groupAbortFlag = gjob->abortFlagPtr;
@@ -358,7 +359,7 @@ fail:
   goto exit;
 }
 
-ncclResult_t ncclGroupEndInternal() {
+ncclResult_t ncclGroupEndInternal() { // ncclGroupEnd
   ncclResult_t ret = ncclSuccess;
 
   if (ncclGroupDepth == 0) {
@@ -403,6 +404,7 @@ ncclResult_t ncclGroupEndInternal() {
       ret = ncclInProgress;
     } else {
       /* blocking group */
+      // 阻塞模式，直接执行
       NCCLCHECKGOTO(groupLaunch(&ncclGroupJobMainPtr->base), ret, fail);
       groupResetJobState();
     }

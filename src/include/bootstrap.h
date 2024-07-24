@@ -10,9 +10,9 @@
 #include "nccl.h"
 #include "comm.h"
 
-struct ncclBootstrapHandle {
-  uint64_t magic;
-  union ncclSocketAddress addr;
+struct ncclBootstrapHandle { // bootstrap
+  uint64_t magic;               // 8字节
+  union ncclSocketAddress addr; // 28字节
 };
 static_assert(sizeof(struct ncclBootstrapHandle) <= sizeof(ncclUniqueId), "Bootstrap handle is too large to fit inside NCCL unique ID");
 

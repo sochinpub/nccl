@@ -10,7 +10,7 @@
 #include "shm.h"
 #include "p2p.h"
 
-enum p2pType { P2P_DIRECT, P2P_INTERMEDIATE, P2P_IPC, P2P_CUMEM };
+enum p2pType { P2P_DIRECT, P2P_INTERMEDIATE, P2P_IPC, P2P_CUMEM }; // Sochin: direct, intermediate, ipc, cumem
 
 struct ncclP2pBuff {
   void* directPtr;
@@ -32,7 +32,7 @@ struct p2pShm {
   struct ncclSendMem sendMem;
   struct ncclRecvMem recvMem;
 };
-struct p2pShmProxyInfo {
+struct p2pShmProxyInfo {                                  // local    ------      proxy           GPU
   // Shared memory between proxy and receiving GPU
   struct p2pShm* shm;
   struct p2pShm* devShm;
@@ -40,14 +40,14 @@ struct p2pShmProxyInfo {
   int shmSize;
   ncclShmHandle_t handle;
 
-  // Intermediate step for sender
+  // Intermediate step for sender                     Sochin: 中间拷贝的mem
   struct ncclRecvMem* ceRecvMem;
   char* ceDevBuff;
 
   // Receiver buffer
   char* recvFifo;
 
-  // Used by CE memcpy progress only
+  // Used by CE memcpy progress only                Sochin： what is CE ???
   uint64_t step;
   cudaStream_t stream;
   cudaEvent_t events[NCCL_STEPS];
@@ -78,7 +78,7 @@ struct p2pCuMemProxyInfo {
 #include <sys/types.h>
 
 /* Convert a PCI busId string into a local cudaDev device index (cf. CUDA_VISIBLE_DEVICES) */
-static int busIdToCudaDev(int64_t busId) {
+static int busIdToCudaDev(int64_t busId) {  // Sochin: bus id转 设备编号
   int ndev;
   if (cudaGetDeviceCount(&ndev) != cudaSuccess)
     return -1;
@@ -95,7 +95,20 @@ static int busIdToCudaDev(int64_t busId) {
 }
 
 // CE memcpy support
-NCCL_PARAM(P2pUseCudaMemcpy, "P2P_USE_CUDA_MEMCPY", 0);
+NCCL_PARAM(P2pUseCudaMemcpy, "P2P_USE_CUDA_MEMCPY", 0);  // Sochin: ncclLoadParam
+/*
+  int64_t ncclParamP2pUseCudaMemcpy() {
+    constexpr int64_t uninitialized = INT64_MIN;
+    static_assert(deftVal != uninitialized, "default value cannot be the uninitialized value.");
+    static int64_t cache = uninitialized;
+    if (__builtin_expect(__atomic_load_n(&cache, __ATOMIC_RELAXED) == uninitialized, false)) {
+      ncclLoadParam("NCCL_" "P2P_USE_CUDA_MEMCPY", 0, uninitialized, &cache);
+    }
+    return cache;
+  }
+
+*/
+
 static int useMemcpy = 0;
 static void initCeOperation();
 

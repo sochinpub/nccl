@@ -25,18 +25,18 @@ typedef enum ncclGroupJobState {
   ncclGroupJobDone    = 1,
   ncclGroupJobJoined  = 2,
 } ncclGroupJobState_t;
-
+// 异步任务
 struct ncclAsyncJob {
-  struct ncclAsyncJob* next;
-  pthread_t thread;
+  struct ncclAsyncJob* next;    // 挂链
+  pthread_t thread;             // 执行线程
   ncclResult_t result;
-  ncclResult_t(*func)(struct ncclAsyncJob*);
+  ncclResult_t(*func)(struct ncclAsyncJob*); // 执行函数
   void(*undo)(struct ncclAsyncJob*);
   void(*destructor)(void*);
-  ncclGroupJobState_t state;
+  ncclGroupJobState_t state;      // 状态
   volatile uint32_t *abortFlag; /* point to comm abortFlag */
   volatile uint32_t *childAbortFlag; /* point to child abortFlag */
-  ncclComm_t comm;
+  ncclComm_t comm;              // 通信域
 };
 
 ncclResult_t ncclAsyncLaunch(
@@ -70,14 +70,14 @@ extern __thread int ncclGroupBlocking;
 extern __thread struct ncclGroupJob *ncclGroupJobMainPtr;
 extern __thread struct ncclGroupJob ncclGroupJobMain;
 
-static inline void groupResetJobState() {
+static inline void groupResetJobState() { // 重置group状态
   ncclGroupBlocking = -1;
   ncclGroupJobMainPtr = NULL;
   memset(&ncclGroupJobMain, 0, sizeof(struct ncclGroupJob));
   return;
 }
 
-static inline ncclResult_t groupJobComplete(struct ncclGroupJob* job) {
+static inline ncclResult_t groupJobComplete(struct ncclGroupJob* job) { // 完成当前异步任务
   ncclResult_t ret = ncclSuccess;
   if (job) {
     ret = ncclAsyncJobComplete(&job->base);
@@ -86,9 +86,9 @@ static inline ncclResult_t groupJobComplete(struct ncclGroupJob* job) {
   return ret;
 }
 
-inline ncclResult_t ncclGroupStartInternal() {
+inline ncclResult_t ncclGroupStartInternal() { // ncclGroupStart
   /* if previous group launch does not complete, don't launch this one. */
-  if (ncclGroupJobMainPtr != NULL) {
+  if (ncclGroupJobMainPtr != NULL) { // 当前线程的上下文主任务
     if (__atomic_load_n(&ncclGroupJobMainPtr->doneFlag, __ATOMIC_ACQUIRE) == false) {
       return ncclInvalidUsage;
     } else {
@@ -107,7 +107,7 @@ inline ncclResult_t ncclGroupErrCheck(ncclResult_t ret) {
 }
 
 // Add comm to this thread's group
-inline void ncclGroupCommJoin(struct ncclComm* comm) {
+inline void ncclGroupCommJoin(struct ncclComm* comm) { // 添加 comm域到当前group
   if (comm->groupNext == reinterpret_cast<struct ncclComm*>(0x1)) {
     // Insert comm into ncclGroupCommHead adjacent to sibling comms. This preserves
     // the users program order yet insures siblings occur consecutively. This

@@ -54,7 +54,7 @@ ncclResult_t getBusId(int cudaDev, int64_t *busId) {
   return ncclSuccess;
 }
 
-ncclResult_t getHostName(char* hostname, int maxlen, const char delim) {
+ncclResult_t getHostName(char* hostname, int maxlen, const char delim) { // 获取主机名
   if (gethostname(hostname, maxlen) != 0) {
     strncpy(hostname, "unknown", maxlen);
     return ncclSystemError;
@@ -134,7 +134,7 @@ uint64_t getPidHash(void) {
   return getHash(pname, strlen(pname));
 }
 
-int parseStringList(const char* string, struct netIf* ifList, int maxList) {
+int parseStringList(const char* string, struct netIf* ifList, int maxList) { // 解析 ip:port
   if (!string) return 0;
 
   const char* ptr = string;

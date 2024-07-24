@@ -165,7 +165,7 @@ enum ncclNetState {
 enum ncclNetState ncclNetStates[3] = { ncclNetStateInit, ncclNetStateInit, ncclNetStateInit };
 enum ncclNetState ncclCollNetStates[3] = { ncclNetStateInit, ncclNetStateInit, ncclNetStateInit };
 
-ncclResult_t ncclNetPluginInit() {
+ncclResult_t ncclNetPluginInit() { // 什么是网络插件 ???
   char ncclNetPluginName[128];
   const char* envPluginName = getenv("NCCL_NET_PLUGIN");
   if (envPluginName && strlen(envPluginName)) {

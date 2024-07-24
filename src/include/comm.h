@@ -24,7 +24,7 @@ struct cudaLaunchParams {
 };
 #endif
 
-#define CACHE_LINE_SIZE 128
+#define CACHE_LINE_SIZE 128               // GPU cache line 128B
 #define MEM_ALIGN 4096
 #define CUDA_IPC_MIN 2097152UL
 

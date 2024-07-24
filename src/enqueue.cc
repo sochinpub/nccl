@@ -95,8 +95,8 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, int* workFunc
 NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
 
 // Returns maximum kernel stack size of all CUDA kernels
-ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) {
-  constexpr int KernelCount = sizeof(ncclKerns)/sizeof(ncclKerns[0]);
+ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) { // kernel的栈大小初始化
+  constexpr int KernelCount = sizeof(ncclKerns)/sizeof(ncclKerns[0]);       // kernel的数量
   ncclResult_t result = ncclSuccess;
 
   if (maxStackSize) *maxStackSize = 0;
@@ -1466,7 +1466,7 @@ static ncclResult_t hostToDevRedOp(
 // Converts `info` to a task and adds it to `comm->tasks`. The exception is with
 // single rank communicators, collectives are issued as `ncclMemcpyAsync`s and
 // thus don't need a task.
-static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo const* info) {
+static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo const* info) { // 
   ncclTasks *tasks = &comm->tasks;
   if (info->coll == ncclFuncSend || info->coll == ncclFuncRecv) {
     int peer = info->root;
@@ -1475,13 +1475,14 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo const* inf
 
     // Must be in thread local group before tasks can be alloc'd in `comm->memScoped`.
     ncclGroupCommJoin(info->comm);
+    // 分配p2p任务
     struct ncclTaskP2p* p2p = ncclMemoryStackAlloc<struct ncclTaskP2p>(&comm->memScoped);
     p2p->buff = (void*)info->recvbuff;
     p2p->bytes = nBytes;
     p2p->chunk = 0;
     ncclIntruQueueEnqueue(
       isSendNotRecv ? &tasks->peers[peer].sendQueue : &tasks->peers[peer].recvQueue,
-      p2p);
+      p2p); // 插入对位
     tasks->nTasksP2p += 1;
 
     // Mark channels that need pre-connect
@@ -1566,7 +1567,7 @@ static ncclResult_t taskAppend(struct ncclComm* comm, struct ncclInfo const* inf
   return ncclSuccess;
 }
 
-ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
+ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) { // nccl调用入队
   NCCLCHECK(ncclGroupStartInternal());
   ncclResult_t ret = ncclSuccess;
   int devOld = -1;
@@ -1575,7 +1576,7 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
   // Check whether communicator is ready to communicate
   NCCLCHECKGOTO(ncclCommEnsureReady(info->comm), ret, fail);
 
-  if (info->comm->checkPointers) {
+  if (info->comm->checkPointers) { // 这是做什么 ???
     CUDACHECKGOTO(cudaGetDevice(&devOld), ret, fail);
     CUDACHECKGOTO(cudaSetDevice(info->comm->cudaDev), ret, fail);
   }

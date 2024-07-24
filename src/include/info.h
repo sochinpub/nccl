@@ -31,7 +31,7 @@ typedef enum : uint8_t {
 } ncclPattern_t;
 
 // Used to pass NCCL call information between functions
-struct ncclInfo {
+struct ncclInfo { // NCCL 调用信息
   ncclFunc_t coll;
   const char* opName;
   // NCCL Coll Args

@@ -14,7 +14,7 @@ void setEnvFile(const char* fileName);
 void initEnv();
 
 void ncclLoadParam(char const* env, int64_t deftVal, int64_t uninitialized, int64_t* cache);
-
+// NCCL 静态缓存的参数
 #define NCCL_PARAM(name, env, deftVal) \
   int64_t ncclParam##name() { \
     constexpr int64_t uninitialized = INT64_MIN; \

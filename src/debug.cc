@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <sys/syscall.h>
-
+// NCCL_DEBUG
 int ncclDebugLevel = -1;
 static int pid = -1;
 static char hostname[1024];
@@ -25,8 +25,9 @@ static __thread int tid = -1;
 void ncclDebugInit() {
   pthread_mutex_lock(&ncclDebugLock);
   if (ncclDebugLevel != -1) { pthread_mutex_unlock(&ncclDebugLock); return; }
-  const char* nccl_debug = getenv("NCCL_DEBUG");
+  const char* nccl_debug = getenv("NCCL_DEBUG");  // 环境变量 NCCL_DEBUG
   int tempNcclDebugLevel = -1;
+  // debug level
   if (nccl_debug == NULL) {
     tempNcclDebugLevel = NCCL_LOG_NONE;
   } else if (strcasecmp(nccl_debug, "VERSION") == 0) {
@@ -45,7 +46,7 @@ void ncclDebugInit() {
    * This can be a comma separated list such as INIT,COLL
    * or ^INIT,COLL etc
    */
-  char* ncclDebugSubsysEnv = getenv("NCCL_DEBUG_SUBSYS");
+  char* ncclDebugSubsysEnv = getenv("NCCL_DEBUG_SUBSYS"); // 子系统开启DEBUG日志
   if (ncclDebugSubsysEnv != NULL) {
     int invert = 0;
     if (ncclDebugSubsysEnv[0] == '^') { invert = 1; ncclDebugSubsysEnv++; }
@@ -90,20 +91,20 @@ void ncclDebugInit() {
   }
 
   // Cache pid and hostname
-  getHostName(hostname, 1024, '.');
+  getHostName(hostname, 1024, '.'); // 当前pid和hostname
   pid = getpid();
 
   /* Parse and expand the NCCL_DEBUG_FILE path and
    * then create the debug file. But don't bother unless the
    * NCCL_DEBUG level is > VERSION
    */
-  const char* ncclDebugFileEnv = getenv("NCCL_DEBUG_FILE");
+  const char* ncclDebugFileEnv = getenv("NCCL_DEBUG_FILE"); // NCCL_DEBUG_FILE的文件路径
   if (tempNcclDebugLevel > NCCL_LOG_VERSION && ncclDebugFileEnv != NULL) {
     int c = 0;
     char debugFn[PATH_MAX+1] = "";
     char *dfn = debugFn;
     while (ncclDebugFileEnv[c] != '\0' && c < PATH_MAX) {
-      if (ncclDebugFileEnv[c++] != '%') {
+      if (ncclDebugFileEnv[c++] != '%') { // 不拷贝 %
         *dfn++ = ncclDebugFileEnv[c-1];
         continue;
       }
@@ -141,6 +142,7 @@ void ncclDebugInit() {
 /* Common logging function used by the INFO, WARN and TRACE macros
  * Also exported to the dynamically loadable Net transport modules so
  * they can share the debugging mechanisms and output files
+ *  debug 日志打印
  */
 void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *filefunc, int line, const char *fmt, ...) {
   if (__atomic_load_n(&ncclDebugLevel, __ATOMIC_ACQUIRE) == -1) ncclDebugInit();
@@ -194,7 +196,7 @@ void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags, const char *file
 
 NCCL_PARAM(SetThreadName, "SET_THREAD_NAME", 0);
 
-void ncclSetThreadName(pthread_t thread, const char *fmt, ...) {
+void ncclSetThreadName(pthread_t thread, const char *fmt, ...) { // 设置线程名称
   // pthread_setname_np is nonstandard GNU extension
   // needs the following feature test macro
 #ifdef _GNU_SOURCE

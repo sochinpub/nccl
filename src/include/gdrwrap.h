@@ -156,7 +156,7 @@ typedef struct gdr_mem_desc {
   gdr_mh_t gdrMh;
 } gdr_mem_desc_t;
 
-static gdr_t ncclGdrInit() {
+static gdr_t ncclGdrInit() { // GPU direct rdma
   int libMajor, libMinor, drvMajor, drvMinor;
   gdr_t handle = NULL;
   // Dynamically load the GDRAPI library symbols

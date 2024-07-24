@@ -51,7 +51,7 @@ inline uint64_t clockNano() {
 
 /* get any bytes of random data from /dev/urandom, return 0 if it succeeds; else
  * return -1 */
-inline ncclResult_t getRandomData(void* buffer, size_t bytes) {
+inline ncclResult_t getRandomData(void* buffer, size_t bytes) { // 随机数据
   ncclResult_t ret = ncclSuccess;
   if (bytes > 0) {
     const size_t one = 1UL;
@@ -182,7 +182,7 @@ T* ncclIntruQueueMpscAbandon(struct ncclIntruQueueMpsc<T,next>* me);
 
 ////////////////////////////////////////////////////////////////////////////////
 
-struct ncclMemoryStack {
+struct ncclMemoryStack {  // 什么是内存栈  ???
   struct Hunk {
     struct Hunk* above; // reverse stack pointer
     size_t size; // size of this allocation (including this header struct)
@@ -308,7 +308,7 @@ inline void ncclMemoryPoolTakeAll(struct ncclMemoryPool* me, struct ncclMemoryPo
 
 ////////////////////////////////////////////////////////////////////////////////
 
-template<typename T, T *T::*next>
+template<typename T, T *T::*next> // 队列
 struct ncclIntruQueue {
   T *head, *tail;
 };
@@ -335,7 +335,7 @@ inline T* ncclIntruQueueTail(ncclIntruQueue<T,next> *me) {
 }
 
 template<typename T, T *T::*next>
-inline void ncclIntruQueueEnqueue(ncclIntruQueue<T,next> *me, T *x) {
+inline void ncclIntruQueueEnqueue(ncclIntruQueue<T,next> *me, T *x) { // 插入队尾
   x->*next = nullptr;
   (me->head ? me->tail->*next : me->head) = x;
   me->tail = x;

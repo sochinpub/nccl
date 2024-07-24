@@ -20,7 +20,7 @@
 uint64_t clockNano(); // from utils.h with which we have a circular dependency
 
 template <typename T>
-ncclResult_t ncclCudaHostCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {
+ncclResult_t ncclCudaHostCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) { // 
   ncclResult_t result = ncclSuccess;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
   *ptr = nullptr;
@@ -41,7 +41,7 @@ inline ncclResult_t ncclCudaHostFree(void* ptr) {
 }
 
 template <typename T>
-ncclResult_t ncclCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {
+ncclResult_t ncclCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) { // 分配内存，并记录日志
   void* p = malloc(nelem*sizeof(T));
   if (p == NULL) {
     WARN("Failed to malloc %ld bytes", nelem*sizeof(T));

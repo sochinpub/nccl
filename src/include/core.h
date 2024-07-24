@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include <algorithm> // For std::min/std::max
 #include "nccl.h"
-
+// profapi 是什么 ???
 #ifdef PROFAPI
 #define NCCL_API(ret, func, args...)        \
     __attribute__ ((visibility("default"))) \

@@ -33,14 +33,14 @@ struct ncclConnector;
 struct ncclComm;
 
 struct ncclPeerInfo {
-  int rank;
-  int cudaDev;
-  int nvmlDev;
-  int gdrSupport;
-  uint64_t hostHash;
-  uint64_t pidHash;
-  dev_t shmDev;
-  int64_t busId;
+  int rank;               // 当前rank
+  int cudaDev;            // 当前cuda设备
+  int nvmlDev;            // nvml设备号
+  int gdrSupport;         // 是否支持gdr
+  uint64_t hostHash;      // 所在的宿主机
+  uint64_t pidHash;       // 所在的进程号
+  dev_t shmDev;           // /dev/shm设备的信息
+  int64_t busId;          // 
   struct ncclComm* comm;
   int cudaCompCap;
 };

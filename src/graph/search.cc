@@ -13,35 +13,35 @@
 NCCL_PARAM(CrossNic, "CROSS_NIC", 2);
 
 // Initialize system->maxBw. This is the per-channel (i.e. per-SM)
-// max bw.
+// max bw. 最大带宽
 static float getMaxBw(struct ncclTopoSystem* system, struct ncclTopoNode* gpu, int type) {
   float maxBw = 0.0;
-  for (int i=0; i<system->nodes[type].count; i++) {
-    struct ncclTopoLinkList* path = gpu->paths[type]+i;
+  for (int i=0; i<system->nodes[type].count; i++) { // 遍历某类型设备
+    struct ncclTopoLinkList* path = gpu->paths[type]+i; // 当前GPU到该类型的该设备的链路
     float bw = path->bw;
-    if (path->count == 0) continue;
+    if (path->count == 0) continue;                     // 不存在链路
     maxBw = std::max(maxBw, bw);
   }
   return maxBw;
 }
-static float getTotalBw(struct ncclTopoSystem* system, struct ncclTopoNode* gpu) {
+static float getTotalBw(struct ncclTopoSystem* system, struct ncclTopoNode* gpu) { // 
   float nvlinkBw = 0.0, pciBw = 0.0;
-  for (int l=0; l<gpu->nlinks; l++) {
-    struct ncclTopoLink* link = gpu->links+l;
-    if (link->type == LINK_NVL) nvlinkBw += link->bw;
-    if (link->type == LINK_PCI) pciBw = link->bw;
+  for (int l=0; l<gpu->nlinks; l++) { // 当前GPU的链路数量
+    struct ncclTopoLink* link = gpu->links+l;           // 某条链路
+    if (link->type == LINK_NVL) nvlinkBw += link->bw;   // 叠加NVLink带宽
+    if (link->type == LINK_PCI) pciBw = link->bw;       // 叠加PCIe带宽
   }
-  return std::max(pciBw, nvlinkBw);
+  return std::max(pciBw, nvlinkBw);                     // 返回较大值
 }
 ncclResult_t ncclTopoSearchInit(struct ncclTopoSystem* system) {
   system->maxBw = 0.0;
   system->totalBw = 0.0;
-  int inter = system->nodes[NET].count;
-  if (inter == 0 && system->nodes[GPU].count == 1) {
+  int inter = system->nodes[NET].count;                 // 网卡数量
+  if (inter == 0 && system->nodes[GPU].count == 1) {    // 单网卡
     system->maxBw = LOC_BW;
     return ncclSuccess;
   }
-  for (int g=0; g<system->nodes[GPU].count; g++) {
+  for (int g=0; g<system->nodes[GPU].count; g++) {      // 遍历所有GPU
     struct ncclTopoNode* gpu = system->nodes[GPU].nodes+g;
     system->maxBw = std::max(system->maxBw, getMaxBw(system, gpu, inter ? NET : GPU));
     system->totalBw = std::max(system->totalBw, getTotalBw(system, gpu));
@@ -49,10 +49,11 @@ ncclResult_t ncclTopoSearchInit(struct ncclTopoSystem* system) {
   return ncclSuccess;
 }
 
-static ncclResult_t findRevLink(struct ncclTopoNode* node1, struct ncclTopoNode* node2, struct ncclTopoLink** revLink) {
+static ncclResult_t findRevLink(struct ncclTopoNode* node1, struct ncclTopoNode* node2, struct ncclTopoLink** revLink)
+{ // 查找从node1到node2之间的链路
   for (int l=0; l<node2->nlinks; l++) {
-    struct ncclTopoLink* link = node2->links+l;
-    if (link->remNode == node1) {
+    struct ncclTopoLink* link = node2->links+l; // 当前链路
+    if (link->remNode == node1) {               // 当前链路链接到了node1
       *revLink = link;
       return ncclSuccess;
     }
@@ -147,15 +148,15 @@ rewind:
   return ncclSuccess;
 }
 
-static int gpuPciBw(struct ncclTopoNode* gpu) {
+static int gpuPciBw(struct ncclTopoNode* gpu) { // gpu的PCI带宽
   for (int l=0; l<gpu->nlinks; l++) {
     struct ncclTopoLink* gpuLink = gpu->links+l;
-    if (gpuLink->type != LINK_PCI) continue;
-    struct ncclTopoNode* pci = gpuLink->remNode;
+    if (gpuLink->type != LINK_PCI) continue;        // 非PCIe连接
+    struct ncclTopoNode* pci = gpuLink->remNode;    // 连接的对端
     for (int l=0; l<pci->nlinks; l++) {
       struct ncclTopoLink* pciLink = pci->links+l;
       if (pciLink->remNode != gpu) continue;
-      return std::min(gpuLink->bw, pciLink->bw);
+      return std::min(gpuLink->bw, pciLink->bw);    // 返回双向的最小带宽
     }
   }
   return -1;
@@ -173,7 +174,7 @@ struct ncclGpuScore {
   int interBw;    // Most important
 };
 
-static int cmpScore(const void * g1, const void * g2) {
+static int cmpScore(const void * g1, const void * g2) { // GPU 得分
    struct ncclGpuScore *s1 = (struct ncclGpuScore*)g1;
    struct ncclGpuScore *s2 = (struct ncclGpuScore*)g2;
    int d;
@@ -185,7 +186,7 @@ static int cmpScore(const void * g1, const void * g2) {
    return s1->startIndex - s2->startIndex;
 }
 
-static int cmpIntraScores(struct ncclGpuScore* scores, int count) {
+static int cmpIntraScores(struct ncclGpuScore* scores, int count) { // 内部互连得分
   int intraBw = scores[0].intraBw;
   int intraNhops = scores[0].intraNhops;
   for (int i=1; i<count; i++) {
@@ -224,7 +225,8 @@ static ncclResult_t getNetPaths(struct ncclTopoSystem* system, struct ncclTopoGr
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoSearchNextGpuSort(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, struct ncclTopoNode* gpu, int* next, int* countPtr, int sortNet) {
+ncclResult_t ncclTopoSearchNextGpuSort(struct ncclTopoSystem* system, struct ncclTopoGraph* graph, struct ncclTopoNode* gpu, int* next, int* countPtr, int sortNet)
+{
   const uint64_t flag = 1ULL<<(graph->nChannels);
   int ngpus = system->nodes[GPU].count;
   struct ncclTopoLinkList* paths = gpu->paths[GPU];
@@ -1006,11 +1008,11 @@ ncclResult_t ncclTopoPrintGraph(struct ncclTopoSystem* system, struct ncclTopoGr
 
 ncclResult_t ncclTopoDumpGraphs(struct ncclTopoSystem* system, int ngraphs, struct ncclTopoGraph** graphs) {
   char* str = getenv("NCCL_GRAPH_DUMP_FILE");
-  if (str) {
+  if (str) {                                                                              // 用户配置文件NCCL_GRAPH_DUMP_FILE
     INFO(NCCL_ENV, "NCCL_GRAPH_DUMP_FILE set by environment to %s", str);
     struct ncclXml* xml;
     NCCLCHECK(ncclCalloc(&xml, 1));
-    NCCLCHECK(ncclTopoGetXmlFromGraphs(ngraphs, graphs, system, xml));
+    NCCLCHECK(ncclTopoGetXmlFromGraphs(ngraphs, graphs, system, xml));                  // 转换成xml， dump到xml
     NCCLCHECK(ncclTopoDumpXmlToFile(str, xml));
     free(xml);
   }
@@ -1034,7 +1036,8 @@ ncclResult_t getNvlsNetDev(struct ncclComm* comm, struct ncclTopoGraph* graph, i
 // 0: don't use PXN for P2P, 1: use PXN if needed, 2: use PXN as much as possible to maximize aggregation
 NCCL_PARAM(P2pPxnLevel, "P2P_PXN_LEVEL", 2);
 
-ncclResult_t ncclTopoGetNetDev(struct ncclComm* comm, int rank, struct ncclTopoGraph* graph, int channelId, int peerRank, int* dev, int* proxyRank) {
+ncclResult_t ncclTopoGetNetDev(struct ncclComm* comm, int rank, struct ncclTopoGraph* graph, int channelId, int peerRank, int* dev, int* proxyRank)
+{
   if (graph) {
     // Honor the net device in the graph
     int channel = channelId%graph->nChannels;

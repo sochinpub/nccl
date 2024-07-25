@@ -69,9 +69,10 @@ struct ncclKernelMatch {
 
 // Must be consistent with the ncclFuncSet enum
 static const ncclKernelMatch ncclKerns[1+ncclNumTypes+NCCL_NUM_FUNCTIONS*ncclNumDevRedOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
+  // 1 + 9 (nccl数据类型) + 5（通信语义） * 6（规约算法，例如sum） * 9 （nccl数据类型）* 6(sum算法， Tree/Ring/CollNet) * 3 (协议：Simple/LL/LL128)
   {(void*)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), true},
   // We don't bake special kernels for the one-rank reductions
-  {/*int8*/(void*)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), false},
+  {/*int8*/(void*)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), false}, // ncclKernel_##func##_##algo##_##proto##_##devredop##_##type: ncclKernel_SendRecv_RING_SIMPLE_Sum_int8_t 函数
   {/*uint8*/(void*)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), false},
   {/*int32*/(void*)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), false},
   {/*uint32*/(void*)NCCL_KERN_NAME(SendRecv, RING, SIMPLE, Sum, int8_t), false},
@@ -113,7 +114,7 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) { // k
     if (maxStackSize) {
       cudaFuncAttributes attr = {0};
       CUDACHECKGOTO(cudaFuncGetAttributes(&attr, fn), result, ignore0);
-      if (attr.localSizeBytes > *maxStackSize) *maxStackSize = attr.localSizeBytes;
+      if (attr.localSizeBytes > *maxStackSize) *maxStackSize = attr.localSizeBytes; // 记录最大的local size
     ignore0:;
     }
 
@@ -130,7 +131,7 @@ ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) { // k
         result, next_kernel);
     }
   next_kernel:;
-  }
+  } // for
   return result;
 }
 

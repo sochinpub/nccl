@@ -12,6 +12,7 @@
 #include <memory>
 #include <mutex>
 
+// 进程全局信息
 int ncclNvmlDeviceCount = 0;
 ncclNvmlDeviceInfo ncclNvmlDevices[ncclNvmlMaxDevices];
 ncclNvmlDevicePairInfo ncclNvmlDevicePairs[ncclNvmlMaxDevices][ncclNvmlMaxDevices];
@@ -24,6 +25,7 @@ ncclNvmlDevicePairInfo ncclNvmlDevicePairs[ncclNvmlMaxDevices][ncclNvmlMaxDevice
 #endif
 
 namespace {
+  // NVML的函数接口指针 pfn_
   NCCL_NVML_FN(nvmlInit, nvmlReturn_t, ())
   NCCL_NVML_FN(nvmlInit_v2, nvmlReturn_t, ())
   NCCL_NVML_FN(nvmlShutdown, nvmlReturn_t, ())
@@ -46,12 +48,12 @@ namespace {
   ncclResult_t initResult;
 }
 
-ncclResult_t ncclNvmlEnsureInitialized() {
+ncclResult_t ncclNvmlEnsureInitialized() { // 加载nvml的动态so
   // Optimization to avoid repeatedly grabbing the lock when we only want to
   // read from the global tables.
   if (threadInitialized) return initResult;
-  threadInitialized = true;
-
+  threadInitialized = true;                   // 一个线程只初始化一次
+  // 加锁
   std::lock_guard<std::mutex> locked(lock);
 
   if (initialized) return initResult;
@@ -95,7 +97,7 @@ ncclResult_t ncclNvmlEnsureInitialized() {
   #else
     bool have_v2 = pfn_nvmlInit_v2 != nullptr; // if this compare is done in the NCCL_NVML_DIRECT=1 case then GCC warns about it never being null
   #endif
-  nvmlReturn_t res1 = (have_v2 ? pfn_nvmlInit_v2 : pfn_nvmlInit)();
+  nvmlReturn_t res1 = (have_v2 ? pfn_nvmlInit_v2 : pfn_nvmlInit)();       // nvml init
   if (res1 != NVML_SUCCESS) {
     WARN("nvmlInit%s() failed: %s", have_v2 ? "_v2" : "", pfn_nvmlErrorString(res1));
     initResult = ncclSystemError;
@@ -103,7 +105,7 @@ ncclResult_t ncclNvmlEnsureInitialized() {
   }
 
   unsigned int ndev;
-  res1 = (have_v2 ? pfn_nvmlDeviceGetCount_v2 : pfn_nvmlDeviceGetCount)(&ndev);
+  res1 = (have_v2 ? pfn_nvmlDeviceGetCount_v2 : pfn_nvmlDeviceGetCount)(&ndev); // nvmlDeviceGetCount
   if (res1 != NVML_SUCCESS) {
     WARN("nvmlDeviceGetCount%s() failed: %s", have_v2 ? "_v2" :"", pfn_nvmlErrorString(res1));
     initResult = ncclSystemError;
@@ -118,7 +120,7 @@ ncclResult_t ncclNvmlEnsureInitialized() {
   }
 
   for(int a=0; a < ncclNvmlDeviceCount; a++) {
-    res1 = pfn_nvmlDeviceGetHandleByIndex(a, &ncclNvmlDevices[a].handle);
+    res1 = pfn_nvmlDeviceGetHandleByIndex(a, &ncclNvmlDevices[a].handle); // 
     if (res1 != NVML_SUCCESS) {
       WARN("nvmlDeviceGetHandleByIndex(%d) failed: %s", int(a), pfn_nvmlErrorString(res1));
       initResult = ncclSystemError;
@@ -137,7 +139,7 @@ ncclResult_t ncclNvmlEnsureInitialized() {
     for(int b=0; b < ncclNvmlDeviceCount; b++) {
       nvmlDevice_t da = ncclNvmlDevices[a].handle;
       nvmlDevice_t db = ncclNvmlDevices[b].handle;
-
+      // P2P 状态
       res1 = pfn_nvmlDeviceGetP2PStatus(da, db, NVML_P2P_CAPS_INDEX_READ, &ncclNvmlDevicePairs[a][b].p2pStatusRead);
       if (res1 != NVML_SUCCESS) {
         WARN("nvmlDeviceGetP2PStatus(%d,%d,NVML_P2P_CAPS_INDEX_READ) failed: %s", a, b, pfn_nvmlErrorString(res1));
@@ -190,7 +192,7 @@ ncclResult_t ncclNvmlDeviceGetHandleByIndex(unsigned int index, nvmlDevice_t *de
   return ncclSuccess;
 }
 
-ncclResult_t ncclNvmlDeviceGetIndex(nvmlDevice_t device, unsigned* index) {
+ncclResult_t ncclNvmlDeviceGetIndex(nvmlDevice_t device, unsigned* index) { // 通过nvml查询设备号
   NCCLCHECK(ncclNvmlEnsureInitialized());
   for (int d=0; d < ncclNvmlDeviceCount; d++) {
     if (ncclNvmlDevices[d].handle == device) {
@@ -218,7 +220,7 @@ ncclResult_t ncclNvmlDeviceGetNvLinkRemotePciInfo(nvmlDevice_t device, unsigned 
 ncclResult_t ncclNvmlDeviceGetNvLinkCapability(
     nvmlDevice_t device, unsigned int link, nvmlNvLinkCapability_t capability,
     unsigned int *capResult
-  ) {
+  ) { // 获取nvlink能力
   NCCLCHECK(ncclNvmlEnsureInitialized());
   std::lock_guard<std::mutex> locked(lock);
   NVMLTRY(nvmlDeviceGetNvLinkCapability, device, link, capability, capResult);

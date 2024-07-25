@@ -290,7 +290,7 @@ exit:
   return ret;
 }
 
-static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, int ndev, int rank) {
+static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, int ndev, int rank) { // communicator上的一系列初始化
   if (ndev < 1) {
     WARN("invalid device count (%d) requested", ndev);
     return ncclInvalidArgument;
@@ -300,13 +300,13 @@ static ncclResult_t commAlloc(struct ncclComm* comm, struct ncclComm* parent, in
     return ncclInvalidArgument;
   }
 
-  ncclMemoryStackConstruct(&comm->memPermanent);
+  ncclMemoryStackConstruct(&comm->memPermanent);  // 内存初始化
   ncclMemoryStackConstruct(&comm->memScoped);
   comm->destructorHead = nullptr;
   comm->rank = rank;
   comm->nRanks = ndev;
 
-  NCCLCHECK(ncclNetInit(comm));       // 初始化数据网络
+  NCCLCHECK(ncclNetInit(comm));                   // 初始化数据网络
   INFO(NCCL_INIT, "Using network %s", comm->ncclNet->name);
 
   if (parent && parent->config.splitShare) {
@@ -457,7 +457,7 @@ static void showVersion() {
   }
 }
 
-static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, uint64_t commHash) { // 
+static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, uint64_t commHash) { // 填充自己的 info
   info->rank = comm->rank;            // 当前rank
   info->cudaDev = comm->cudaDev;      // 当前cuda设备
   info->nvmlDev = comm->nvmlDev;      // nvml设备
@@ -469,9 +469,9 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
   // communication in a container environment
   struct stat statbuf;
   SYSCHECK(stat("/dev/shm", &statbuf), "stat");
-  info->shmDev = statbuf.st_dev;
+  info->shmDev = statbuf.st_dev;               // /dev/shm的设备
 
-  info->busId = comm->busId;
+  info->busId = comm->busId;                  // 卡的PCIe busId
 
   NCCLCHECK(ncclGpuGdrSupport(comm, &info->gdrSupport));
   info->comm = comm;
@@ -757,7 +757,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   struct ncclTopoGraph treeGraph;
   struct ncclTopoGraph collNetGraph;
   struct ncclTopoGraph nvlsGraph;
-  struct ncclTopoGraph* graphs[] = { &treeGraph, &ringGraph, &collNetGraph, &collNetGraph, &nvlsGraph, &nvlsGraph };
+  struct ncclTopoGraph* graphs[] = { &treeGraph, &ringGraph, &collNetGraph, &collNetGraph, &nvlsGraph, &nvlsGraph };    // 6类拓扑
 
   struct graphInfo {  // 图信息
     int pattern;
@@ -916,8 +916,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   comm->allocP2pNetLLBuffers = ncclParamAllocP2pNetLLBuffers() == 1;
 
   if (comm->rank == ncclParamGraphDumpFileRank()) {
-    struct ncclTopoGraph* dumpGraphs[4] = { &ringGraph, &treeGraph, &collNetGraph, &nvlsGraph };
-    NCCLCHECKGOTO(ncclTopoDumpGraphs(comm->topo, 4, dumpGraphs), ret, fail);
+    struct ncclTopoGraph* dumpGraphs[4] = { &ringGraph, &treeGraph, &collNetGraph, &nvlsGraph };      // dump 4个图
+    NCCLCHECKGOTO(ncclTopoDumpGraphs(comm->topo, 4, dumpGraphs), ret, fail);                          // 默认在rank0上dump拓扑信息
   }
 
   // AllGather3 - begin
@@ -1482,9 +1482,9 @@ static ncclResult_t parseCommConfig(ncclComm_t comm, ncclConfig_t *config) { // 
 
   internalConfigPtr = &internalConfig;
   if (config) {
-    memcpy((void*)&realSize, (void*)config, sizeof(size_t));
+    memcpy((void*)&realSize, (void*)config, sizeof(size_t));    // 拷贝size字段
     realSize = realSize > sizeof(ncclConfig_t) ? sizeof(ncclConfig_t) : realSize;
-    memcpy((void*)internalConfigPtr, (void*)config, realSize);
+    memcpy((void*)internalConfigPtr, (void*)config, realSize);  // 拷贝到内部的配置
     if (internalConfigPtr->magic != 0xcafebeef) {
       WARN("ncclConfig_t argument not initialized via NCCL_CONFIG_INITIALIZER");
       ret = ncclInvalidArgument;
@@ -1498,7 +1498,7 @@ static ncclResult_t parseCommConfig(ncclComm_t comm, ncclConfig_t *config) { // 
 
     if (internalConfigPtr->version < NCCL_VERSION(2, 17, 0)) {
       internalConfigPtr->cgaClusterSize = defaultConfig.cgaClusterSize;
-      internalConfigPtr->minCTAs = defaultConfig.minCTAs;
+      internalConfigPtr->minCTAs = defaultConfig.minCTAs;               // 什么是CTA, channels数量
       internalConfigPtr->maxCTAs = defaultConfig.maxCTAs;
       internalConfigPtr->netName = defaultConfig.netName;
     }
@@ -1511,7 +1511,7 @@ static ncclResult_t parseCommConfig(ncclComm_t comm, ncclConfig_t *config) { // 
     goto fail;
   }
 
-  if (internalConfigPtr->cgaClusterSize != NCCL_CONFIG_UNDEF_INT && internalConfigPtr->cgaClusterSize < 0) {
+  if (internalConfigPtr->cgaClusterSize != NCCL_CONFIG_UNDEF_INT && internalConfigPtr->cgaClusterSize < 0) {  // 什么是 cga ???
     WARN("Invalid config cgaClusterSize attribute value %d", internalConfigPtr->cgaClusterSize);
     ret = ncclInvalidArgument;
     goto fail;
@@ -1562,7 +1562,7 @@ static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, ncclUni
   ncclComm_t comm = NULL;
   struct ncclCommInitRankAsyncJob *job = NULL;
   char* env = getenv("NCCL_COMM_ID");
-  if (env && myrank == 0) { // 只有 rank0才会执行bootstrap网络初始化
+  if (env && myrank == 0) { // 只有 rank0才会执行bootstrap网络初始化（如果前面延迟创建了）
     INFO(NCCL_ENV, "NCCL_COMM_ID set by environment to %s", env);
     NCCLCHECKGOTO(bootstrapCreateRoot((struct ncclBootstrapHandle*)&commId, true), res, fail);// communicator root
   }
@@ -1582,7 +1582,7 @@ static ncclResult_t ncclCommInitRankDev(ncclComm_t* newcomm, int nranks, ncclUni
   }
   // 新分配一个
   NCCLCHECKGOTO(ncclCalloc(&comm, 1), res, fail);
-  NCCLCHECKGOTO(ncclCudaHostCalloc((uint32_t**)&comm->abortFlag, 1), res, fail);      // 分配一个设备上可以读的 abortFlag标记位（32bits）
+  NCCLCHECKGOTO(ncclCudaHostCalloc((uint32_t**)&comm->abortFlag, 1), res, fail);      // 分配一个设备上可以读的 abortFlag标记位（32bits）：pinmem实现
   NCCLCHECKGOTO(ncclCalloc((uint32_t**)&comm->abortFlagRefCount, 1), res, fail);
   *comm->abortFlagRefCount = 1;
   NCCLCHECKGOTO(parseCommConfig(comm, config), res, fail);

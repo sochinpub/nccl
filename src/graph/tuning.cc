@@ -16,7 +16,7 @@ static int getNthreads(const char* name, int env, int min, int max, int def) {
   int nt = env;
   if (nt > 0) {
     if (nt % WARP_SIZE != 0) {
-      WARN("Invalid %s %d (must be a multiple of %d)", name, nt, WARP_SIZE);
+      WARN("Invalid %s %d (must be a multiple of %d)", name, nt, WARP_SIZE); // warp size: 32
       nt = max;
     } else if (nt > max) {
       WARN("Invalid %s %d (maximum %d).", name, nt, max);

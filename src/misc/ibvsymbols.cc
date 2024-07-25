@@ -3,7 +3,7 @@
 
 #include "ibvsymbols.h"
 
-#ifdef NCCL_BUILD_RDMA_CORE
+#ifdef NCCL_BUILD_RDMA_CORE // 静态链接
 /* RDMA-core linking mode. Symbols are pointers to linked IB Verbs */
 
 #define ASSIGN_SYM(container, symbol, name) container->name= &symbol;
@@ -59,6 +59,7 @@ ncclResult_t buildIbvSymbols(struct ncclIbvSymbols* ibvSymbols) {
 
 #else
 /* RDMA-core dynamic loading mode. Symbols are loaded from shared objects. */
+// 动态链接
 
 #include <dlfcn.h>
 #include "core.h"

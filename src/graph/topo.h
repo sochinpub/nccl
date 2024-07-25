@@ -82,17 +82,17 @@ extern const char* topoLinkTypeStr[];
 extern const char* topoPathTypeStr[];
 
 struct ncclTopoNode;
-struct ncclTopoLink {
-  int type;
-  float bw;
-  struct ncclTopoNode* remNode;
+struct ncclTopoLink {     // 链路
+  int type;               // 链路类型：nvlink/net
+  float bw;              // 链路带宽
+  struct ncclTopoNode* remNode; // 连接到的上行设备
 };
 #define NCCL_TOPO_MAX_LINKS 32
 #define NCCL_TOPO_MAX_HOPS (NCCL_TOPO_MAX_NODES*NCCL_TOPO_NODE_TYPES)
 
 struct ncclTopoLinkList {
-  struct ncclTopoLink* list[NCCL_TOPO_MAX_HOPS];
-  int count;
+  struct ncclTopoLink* list[NCCL_TOPO_MAX_HOPS]; // 256 * 7 条链路
+  int count;              // 连接的链路数目
   float bw;
   int type;
 };
@@ -103,8 +103,8 @@ struct ncclTopoLinkList {
 #define NCCL_TOPO_UNDEF (-1)
 
 struct ncclTopoNode {
-  int type;
-  int64_t id;
+  int type;                               // 类型
+  int64_t id;                             // id
   // Type specific data
   union {
     struct {
@@ -112,7 +112,7 @@ struct ncclTopoNode {
       int rank;
       int cudaCompCap;
       int gdrSupport;
-    }gpu;
+    }gpu;                             // GPU
     struct {
       uint64_t asic;
       int port;
@@ -121,21 +121,21 @@ struct ncclTopoNode {
       int gdrSupport;
       int collSupport;
       int maxChannels;
-    }net;
+    }net;                             // 网卡
     struct {
       int arch;
       int vendor;
       int model;
       cpu_set_t affinity;
-    }cpu;
+    }cpu;                             // CPU 
     struct {
       uint64_t device;
-    }pci;
+    }pci;                             // PCI
   };
-  int nlinks;
-  struct ncclTopoLink links[NCCL_TOPO_MAX_LINKS];
+  int nlinks;                         // 连接数， 最大32
+  struct ncclTopoLink links[NCCL_TOPO_MAX_LINKS];             // 32条链路
   // Pre-computed paths to GPUs and NICs
-  struct ncclTopoLinkList* paths[NCCL_TOPO_NODE_TYPES];
+  struct ncclTopoLinkList* paths[NCCL_TOPO_NODE_TYPES];       // 提前计算好的：到各类设备的某个设备的路径
   // Used during search
   uint64_t used;
 };
@@ -144,9 +144,9 @@ struct ncclTopoNodeSet {
   int count;
   struct ncclTopoNode nodes[NCCL_TOPO_MAX_NODES];
 };
-
+// 
 struct ncclTopoSystem {
-  struct ncclTopoNodeSet nodes[NCCL_TOPO_NODE_TYPES];
+  struct ncclTopoNodeSet nodes[NCCL_TOPO_NODE_TYPES]; // 7类节点，每类节点最大256个设备
   float maxBw;
   float totalBw;
 };
@@ -199,7 +199,7 @@ static ncclResult_t ncclTopoDevToRank(struct ncclTopoSystem* system, int dev, in
 }
 
 // Returns NVLink bw in GB/s
-static float ncclTopoNVLinkBw(int cudaCompCap) {
+static float ncclTopoNVLinkBw(int cudaCompCap) { // nvlink 带宽
   return
     cudaCompCap >= 90 ? SM90_NVLINK_BW :
     cudaCompCap == 86 ? SM86_NVLINK_BW :

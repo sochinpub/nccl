@@ -17,7 +17,7 @@
 /* XML File Parser */
 /*******************/
 
-ncclResult_t xmlGetChar(FILE* file, char* c) {
+ncclResult_t xmlGetChar(FILE* file, char* c) { // 读一个字符
   if (fread(c, 1, 1, file) == 0) {
     WARN("XML Parse : Unexpected EOF");
     return ncclInternalError;
@@ -25,7 +25,7 @@ ncclResult_t xmlGetChar(FILE* file, char* c) {
   return ncclSuccess;
 }
 
-ncclResult_t xmlGetValue(FILE* file, char* value, char* last) {
+ncclResult_t xmlGetValue(FILE* file, char* value, char* last) { // 
   char c;
   NCCLCHECK(xmlGetChar(file, &c));
   if (c != '"' && c != '\'') {
@@ -82,7 +82,7 @@ ncclResult_t xmlGetToken(FILE* file, char* name, char* value, char* last) {
 
 // Shift the 3-chars string by one char and append c at the end
 #define SHIFT_APPEND(s, c) do { s[0]=s[1]; s[1]=s[2]; s[2]=c; } while(0)
-ncclResult_t xmlSkipComment(FILE* file, char* start, char next) {
+ncclResult_t xmlSkipComment(FILE* file, char* start, char next) { // xml注释跳过
   // Start from something neutral with \0 at the end.
   char end[4] = "...";
 
@@ -165,7 +165,8 @@ struct xmlHandler {
   xmlHandlerFunc_t func;
 };
 
-ncclResult_t xmlLoadSub(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head, struct xmlHandler handlers[], int nHandlers) {
+ncclResult_t xmlLoadSub(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head, struct xmlHandler handlers[], int nHandlers)
+{
   if (head && head->type == NODE_TYPE_SINGLE) return ncclSuccess;
   while (1) {
     if (xml->maxIndex == MAX_NODES) {
@@ -214,7 +215,7 @@ ncclResult_t xmlLoadSub(FILE* file, struct ncclXml* xml, struct ncclXmlNode* hea
 /* XML Writer */
 /**************/
 
-ncclResult_t ncclTopoDumpXmlRec(int indent, FILE* file, struct ncclXmlNode* node) {
+ncclResult_t ncclTopoDumpXmlRec(int indent, FILE* file, struct ncclXmlNode* node) { // 输出xml格式到文件
   for (int i=0; i<indent; i++) fprintf(file, " ");
   fprintf(file, "<%s", node->name);
 
@@ -240,7 +241,7 @@ ncclResult_t ncclTopoDumpXmlToFile(const char* xmlTopoFile, struct ncclXml* xml)
     WARN("Unable to open %s, not dumping topology.", xmlTopoFile);
     return ncclSuccess;
   }
-  NCCLCHECK(ncclTopoDumpXmlRec(0, file, xml->nodes));
+  NCCLCHECK(ncclTopoDumpXmlRec(0, file, xml->nodes));     // 不带缩进的xml dump
   fclose(file);
   return ncclSuccess;
 }
@@ -271,19 +272,19 @@ ncclResult_t ncclTopoXmlLoadNic(FILE* file, struct ncclXml* xml, struct ncclXmlN
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoXmlLoadPci(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
+ncclResult_t ncclTopoXmlLoadPci(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) { // 从xml加载pci设备，包括：pci,gpu, nic
   struct xmlHandler handlers[] = { { "pci", ncclTopoXmlLoadPci }, { "gpu", ncclTopoXmlLoadGpu }, { "nic", ncclTopoXmlLoadNic} };
   NCCLCHECK(xmlLoadSub(file, xml, head, handlers, 3));
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoXmlLoadCpu(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
+ncclResult_t ncclTopoXmlLoadCpu(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {  // xml加载cpu设备：包括pci、nic
   struct xmlHandler handlers[] = { { "pci", ncclTopoXmlLoadPci }, { "nic", ncclTopoXmlLoadNic } };
   NCCLCHECK(xmlLoadSub(file, xml, head, handlers, 2));
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoXmlLoadSystem(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
+ncclResult_t ncclTopoXmlLoadSystem(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) { // 从文件加载
   int version;
   NCCLCHECK(xmlGetAttrInt(head, "version", &version));
   if (version != NCCL_TOPO_XML_VERSION) {
@@ -300,8 +301,8 @@ ncclResult_t ncclTopoXmlLoadSystem(FILE* file, struct ncclXml* xml, struct ncclX
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml, int warn) {
-  FILE* file = fopen(xmlTopoFile, "r");
+ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml, int warn) { // 从文件加载拓扑
+  FILE* file = fopen(xmlTopoFile, "r");       // 读文件
   if (file == NULL) {
     if (warn) {
       WARN("Could not open XML topology file %s : %s", xmlTopoFile, strerror(errno));
@@ -326,10 +327,10 @@ ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml
 static void memcpylower(char* dst, const char* src, const size_t size) {
   for (int i=0; i<size; i++) dst[i] = tolower(src[i]);
 }
-static ncclResult_t getPciPath(const char* busId, char** path) {
+static ncclResult_t getPciPath(const char* busId, char** path) { // 给定busId，获取sysfs下的PCI 路径
   char busPath[] = "/sys/class/pci_bus/0000:00/../../0000:00:00.0";
-  memcpylower(busPath+sizeof("/sys/class/pci_bus/")-1, busId, BUSID_REDUCED_SIZE-1);
-  memcpylower(busPath+sizeof("/sys/class/pci_bus/0000:00/../../")-1, busId, BUSID_SIZE-1);
+  memcpylower(busPath+sizeof("/sys/class/pci_bus/")-1, busId, BUSID_REDUCED_SIZE-1);        // 替换 0000:00：     /sys/class/pci_bus/${busId}/../../0000:00:00.0
+  memcpylower(busPath+sizeof("/sys/class/pci_bus/0000:00/../../")-1, busId, BUSID_SIZE-1);  // 替换0000:00:00.0   /sys/class/pci_bus/${busId}/../../${busId}
   *path = realpath(busPath, NULL);
   if (*path == NULL) {
     WARN("Could not find real path of %s", busPath);
@@ -338,7 +339,7 @@ static ncclResult_t getPciPath(const char* busId, char** path) {
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoGetStrFromSys(const char* path, const char* fileName, char* strValue) {
+ncclResult_t ncclTopoGetStrFromSys(const char* path, const char* fileName, char* strValue) { // 读取sysfs路径下的fileName，返回值
   char filePath[PATH_MAX];
   sprintf(filePath, "%s/%s", path, fileName);
   int offset = 0;
@@ -362,7 +363,7 @@ ncclResult_t ncclTopoGetStrFromSys(const char* path, const char* fileName, char*
 ncclResult_t ncclTopoSetAttrFromSys(struct ncclXmlNode* pciNode, const char* path, const char* fileName, const char* attrName) {
   char strValue[MAX_STR_LEN];
   NCCLCHECK(ncclTopoGetStrFromSys(path, fileName, strValue));
-  if (strValue[0] != '\0') { NCCLCHECK(xmlSetAttr(pciNode, attrName, strValue)); }
+  if (strValue[0] != '\0') { NCCLCHECK(xmlSetAttr(pciNode, attrName, strValue)); }      // 设置属性
   TRACE(NCCL_GRAPH, "Read from sys %s/%s -> %s=%s", path, fileName, attrName, strValue);
   return ncclSuccess;
 }
@@ -440,10 +441,10 @@ ncclResult_t ncclTopoGetXmlFromCpu(struct ncclXmlNode* cpuNode, struct ncclXml* 
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoGetPciNode(struct ncclXml* xml, const char* busId, struct ncclXmlNode** pciNode) {
+ncclResult_t ncclTopoGetPciNode(struct ncclXml* xml, const char* busId, struct ncclXmlNode** pciNode) { // 先查询，不存在则创建
   NCCLCHECK(xmlFindTagKv(xml, "pci", pciNode, "busid", busId));
-  if (*pciNode == NULL) {
-    NCCLCHECK(xmlAddNode(xml, NULL, "pci", pciNode));
+  if (*pciNode == NULL) { // 不存在是，创建 一个命名为 pci的子节点，并设置其busId属性
+    NCCLCHECK(xmlAddNode(xml, NULL, "pci", pciNode)); // 创建一个无父亲的pci设备
     NCCLCHECK(xmlSetAttr(*pciNode, "busid", busId));
   }
   return ncclSuccess;
@@ -461,35 +462,35 @@ int checkBDFFormat(char* bdf) {
   return 1;
 }
 
-ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* xml) {
+ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* xml) { // 从sysfs中
   // Fill info, then parent
   const char* busId;
-  NCCLCHECK(xmlGetAttr(pciNode, "busid", &busId));
+  NCCLCHECK(xmlGetAttr(pciNode, "busid", &busId)); // 获取busId(BDF号)
   char* path = NULL;
   ncclDebugNoWarn = NCCL_GRAPH;
-  getPciPath(busId, &path);
+  getPciPath(busId, &path);                        // 或者设备的sysfs路径：/sys/devices/pci0000:00/0000:00:03.0/0000:02:00.0, 0000:02:00.0是busId
   ncclDebugNoWarn = 0;
 
   if (path) {
-    NCCLCHECK(ncclTopoSetAttrFromSys(pciNode, path, "class", "class"));
+    NCCLCHECK(ncclTopoSetAttrFromSys(pciNode, path, "class", "class")); // 读取class，设置属性 "class"=0x030200
   }
   int index;
   ncclDebugNoWarn = NCCL_GRAPH;
   NCCLCHECK(xmlGetAttrIndex(pciNode, "vendor", &index));
   if (index == -1) {
-    if (path) ncclTopoSetAttrFromSys(pciNode, path, "vendor", "vendor");
+    if (path) ncclTopoSetAttrFromSys(pciNode, path, "vendor", "vendor"); // 读取vendor，设置属性 "vendor"=0x10de
   }
-  NCCLCHECK(xmlGetAttrIndex(pciNode, "device", &index));
+  NCCLCHECK(xmlGetAttrIndex(pciNode, "device", &index));                 // 读取device, 设置属性 "device"= 0x15f8
   if (index == -1) {
     if (path) ncclTopoSetAttrFromSys(pciNode, path, "device", "device");
   }
   NCCLCHECK(xmlGetAttrIndex(pciNode, "subsystem_vendor", &index));
   if (index == -1) {
-    if (path) ncclTopoSetAttrFromSys(pciNode, path, "subsystem_vendor", "subsystem_vendor");
+    if (path) ncclTopoSetAttrFromSys(pciNode, path, "subsystem_vendor", "subsystem_vendor");  // 读取subsystem_vendor，设置"subsystem_vendor"=0x10de
   }
   NCCLCHECK(xmlGetAttrIndex(pciNode, "subsystem_device", &index));
   if (index == -1) {
-    if (path) ncclTopoSetAttrFromSys(pciNode, path, "subsystem_device", "subsystem_device");
+    if (path) ncclTopoSetAttrFromSys(pciNode, path, "subsystem_device", "subsystem_device");  // 读取subsystem_device, 设置"subsystem_device"=0x118f
   }
   ncclDebugNoWarn = 0;
   NCCLCHECK(xmlGetAttrIndex(pciNode, "link_speed", &index));
@@ -497,13 +498,13 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
     if (path) {
       char deviceSpeedStr[MAX_STR_LEN];
       float deviceSpeed;
-      NCCLCHECK(ncclTopoGetStrFromSys(path, "max_link_speed", deviceSpeedStr));
+      NCCLCHECK(ncclTopoGetStrFromSys(path, "max_link_speed", deviceSpeedStr)); // 设备的max_link_speed
       sscanf(deviceSpeedStr, "%f GT/s", &deviceSpeed);
       char portSpeedStr[MAX_STR_LEN];
       float portSpeed;
       NCCLCHECK(ncclTopoGetStrFromSys(path, "../max_link_speed", portSpeedStr));
       sscanf(portSpeedStr, "%f GT/s", &portSpeed);
-      NCCLCHECK(xmlSetAttr(pciNode, "link_speed", portSpeed < deviceSpeed ? portSpeedStr : deviceSpeedStr));
+      NCCLCHECK(xmlSetAttr(pciNode, "link_speed", portSpeed < deviceSpeed ? portSpeedStr : deviceSpeedStr)); // 设置属性"link_speed"=8.0
     } else {
       NCCLCHECK(xmlSetAttr(pciNode, "link_speed", ""));
     }
@@ -516,7 +517,7 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
       int deviceWidth = strtol(strValue, NULL, 0);
       NCCLCHECK(ncclTopoGetStrFromSys(path, "../max_link_width", strValue));
       int portWidth = strtol(strValue, NULL, 0);
-      NCCLCHECK(xmlSetAttrInt(pciNode, "link_width", std::min(deviceWidth,portWidth)));
+      NCCLCHECK(xmlSetAttrInt(pciNode, "link_width", std::min(deviceWidth,portWidth))); // 设置属性"link_width"=16
     } else {
       NCCLCHECK(xmlSetAttr(pciNode, "link_width", ""));
     }
@@ -526,10 +527,11 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
     if (path) {
       // Save that for later in case next step is a CPU
       char numaIdStr[MAX_STR_LEN];
-      NCCLCHECK(ncclTopoGetStrFromSys(path, "numa_node", numaIdStr));
+      NCCLCHECK(ncclTopoGetStrFromSys(path, "numa_node", numaIdStr));  // numa_node
 
       // Go up one level in the PCI tree. Rewind two "/" and follow the upper PCI
       // switch, or stop if we reach a CPU root complex.
+      // 向上一级的PCI树，倒回去两个/，跟踪上一级的PCI Switch，直到到达CPU RC
       int slashCount = 0;
       int parentOffset;
       for (parentOffset = strlen(path)-1; parentOffset>0; parentOffset--) {
@@ -566,18 +568,18 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
       }
     } else {
       // No information on /sys, attach GPU to unknown CPU
-      NCCLCHECK(xmlFindTagKv(xml, "cpu", &parent, "numaid", "-1"));
+      NCCLCHECK(xmlFindTagKv(xml, "cpu", &parent, "numaid", "-1")); // 查找一个 没有numa的CPU，挂上去
       if (parent == NULL) {
         struct ncclXmlNode* topNode;
         NCCLCHECK(xmlFindTag(xml, "system", &topNode));
-        NCCLCHECK(xmlAddNode(xml, topNode, "cpu", &parent));
+        NCCLCHECK(xmlAddNode(xml, topNode, "cpu", &parent));  // 将
         NCCLCHECK(xmlSetAttr(parent, "numaid", "-1"));
         NCCLCHECK(ncclTopoGetXmlFromCpu(parent, xml));
       }
     }
     pciNode->parent = parent;
     parent->subs[parent->nSubs++] = pciNode;
-  }
+  } // parent == NULL 
   if (strcmp(parent->name, "pci") == 0) {
     NCCLCHECK(ncclTopoGetXmlFromSys(parent, xml));
   } else if (strcmp(parent->name, "cpu") == 0) {
@@ -589,21 +591,21 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
 
 ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvmlDev, struct ncclXml* xml, struct ncclXmlNode** gpuNodeRet) {
   struct ncclXmlNode* gpuNode = NULL;
-  NCCLCHECK(xmlGetSub(pciNode, "gpu", &gpuNode));
-  if (gpuNode == NULL) NCCLCHECK(xmlAddNode(xml, pciNode, "gpu", &gpuNode));
+  NCCLCHECK(xmlGetSub(pciNode, "gpu", &gpuNode)); // 查找当前pci设备的gpu子节点
+  if (gpuNode == NULL) NCCLCHECK(xmlAddNode(xml, pciNode, "gpu", &gpuNode));    // 添加"gpu"命名的子节点
 
   int index = -1;
 
   int dev = -1;
-  NCCLCHECK(xmlGetAttrIndex(gpuNode, "dev", &index));
+  NCCLCHECK(xmlGetAttrIndex(gpuNode, "dev", &index));         // dev属性
   if (index == -1) {
-    NCCLCHECK(ncclNvmlDeviceGetIndex(nvmlDev, (unsigned int*)&dev));
+    NCCLCHECK(ncclNvmlDeviceGetIndex(nvmlDev, (unsigned int*)&dev));  // 
     NCCLCHECK(xmlSetAttrInt(gpuNode, "dev", dev));
   }
   NCCLCHECK(xmlGetAttrInt(gpuNode, "dev", &dev));
   if (dev == -1) { *gpuNodeRet = NULL; return ncclSuccess; }
 
-  NCCLCHECK(xmlGetAttrIndex(gpuNode, "sm", &index));
+  NCCLCHECK(xmlGetAttrIndex(gpuNode, "sm", &index));          // sm架构
   if (index == -1) {
     int cudaMajor, cudaMinor;
     if (nvmlDev == NULL) {
@@ -619,7 +621,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
   NCCLCHECK(xmlGetAttrInt(gpuNode, "sm", &sm));
 
   struct ncclXmlNode* nvlNode = NULL;
-  NCCLCHECK(xmlGetSub(gpuNode, "nvlink", &nvlNode));
+  NCCLCHECK(xmlGetSub(gpuNode, "nvlink", &nvlNode));          // nvlink
   if (nvlNode == NULL) {
     // NVML NVLink detection
     int maxNvLinks = (sm < 60) ? 0 : (sm < 70) ? 4 : (sm < 80) ? 6 : (sm < 90) ? 12 : 18;
@@ -629,7 +631,7 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
       maxNvLinks = 0;
     }
 
-    for (int l=0; l<maxNvLinks; ++l) {
+    for (int l=0; l<maxNvLinks; ++l) {                    // nvlink探测
       // Check whether we can use this NVLink for P2P
       unsigned canP2P;
       if ((ncclNvmlDeviceGetNvLinkCapability(nvmlDev, l, NVML_NVLINK_CAP_P2P_SUPPORTED, &canP2P) != ncclSuccess) || !canP2P) continue;
@@ -702,14 +704,14 @@ ncclResult_t ncclTopoGetXmlFromGpu(struct ncclXmlNode* pciNode, nvmlDevice_t nvm
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct ncclXmlNode** gpuNode) {
+ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct ncclXmlNode** gpuNode) { // 添加busId的GPU到xml树上
   struct ncclXmlNode* node;
-  NCCLCHECK(ncclTopoGetPciNode(xml, busId, &node));
-  NCCLCHECK(xmlSetAttrIfUnset(node, "class", "0x03"));
-  NCCLCHECK(ncclTopoGetXmlFromSys(node, xml));
+  NCCLCHECK(ncclTopoGetPciNode(xml, busId, &node));         // 创建该busID的GPU节点
+  NCCLCHECK(xmlSetAttrIfUnset(node, "class", "0x03"));      // 设置 class 属性为 0x03
+  NCCLCHECK(ncclTopoGetXmlFromSys(node, xml));              // sysfs探测gpu属性
   nvmlDevice_t nvmlDev;
-  NCCLCHECK(ncclNvmlDeviceGetHandleByPciBusId(busId, &nvmlDev));
-  NCCLCHECK(ncclTopoGetXmlFromGpu(node, nvmlDev, xml, gpuNode));
+  NCCLCHECK(ncclNvmlDeviceGetHandleByPciBusId(busId, &nvmlDev));  // 使用nvml查找GPU设备
+  NCCLCHECK(ncclTopoGetXmlFromGpu(node, nvmlDev, xml, gpuNode));  // nvlink探测
   return ncclSuccess;
 }
 

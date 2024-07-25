@@ -327,7 +327,7 @@ int ncclFindInterfaces(char* ifNames, union ncclSocketAddress *ifAddrs, int ifNa
   int sock_family = envSocketFamily();
   // User specified interface
   char* env = getenv("NCCL_SOCKET_IFNAME");     // 用户指定的网络接口
-  if (env && strlen(env) > 1) {
+  if (env && strlen(env) > 1) { // 设置了NCCL_SOCKET_IFNAME时，走TCP/IP 网络
     INFO(NCCL_ENV, "NCCL_SOCKET_IFNAME set by environment to %s", env);
     // Specified by user : find or fail
     if (shownIfName++ == 0) INFO(NCCL_NET, "NCCL_SOCKET_IFNAME set to %s", env);
@@ -377,7 +377,7 @@ ncclResult_t ncclSocketListen(struct ncclSocket* sock) { // 启动监听
 #endif
   }
 
-  // addr port should be 0 (Any port)： 绑定地址
+  // addr port should be 0 (Any port)： 绑定到一个随机的地址上
   SYSCHECK(bind(sock->fd, &sock->addr.sa, sock->salen), "bind");
 
   /* Get the assigned Port */
@@ -547,9 +547,9 @@ ncclResult_t ncclSocketPollConnect(struct ncclSocket* sock) {
 
 static ncclResult_t socketFinalizeConnect(struct ncclSocket* sock) {
   int sent = 0;
-  NCCLCHECK(socketProgress(NCCL_SOCKET_SEND, sock, &sock->magic, sizeof(sock->magic), &sent));
+  NCCLCHECK(socketProgress(NCCL_SOCKET_SEND, sock, &sock->magic, sizeof(sock->magic), &sent));  // 交换magic
   if (sent == 0) return ncclSuccess;
-  NCCLCHECK(socketWait(NCCL_SOCKET_SEND, sock, &sock->magic, sizeof(sock->magic), &sent));
+  NCCLCHECK(socketWait(NCCL_SOCKET_SEND, sock, &sock->magic, sizeof(sock->magic), &sent));  // 
   sent = 0;
   NCCLCHECK(socketWait(NCCL_SOCKET_SEND, sock, &sock->type, sizeof(sock->type), &sent));
   sock->state = ncclSocketStateReady;

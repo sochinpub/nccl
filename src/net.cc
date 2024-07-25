@@ -288,8 +288,8 @@ ncclResult_t ncclNetInit(struct ncclComm* comm) {
   return ncclSuccess;
 }
 
-ncclResult_t ncclGpuGdrSupport(struct ncclComm* comm, int* gdrSupport) {
-  constexpr int GPU_BUF_SIZE = 2*1024*1024;
+ncclResult_t ncclGpuGdrSupport(struct ncclComm* comm, int* gdrSupport) { // 查看gdr支持
+  constexpr int GPU_BUF_SIZE = 2*1024*1024;     // 2MB 的
 #if CUDART_VERSION >= 11030
   // In CUDA 11.3 and later we can now query the cudaDevAttrGPUDirectRDMASupported attribute
   int driverVersion;
@@ -307,59 +307,59 @@ ncclResult_t ncclGpuGdrSupport(struct ncclComm* comm, int* gdrSupport) {
 	  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
   if (gdrSupportMatrix[comm->cudaDev] == -1) {
     int netDevs;
-    NCCLCHECK(comm->ncclNet->devices(&netDevs));
+    NCCLCHECK(comm->ncclNet->devices(&netDevs));    // 当前网络的网络设备数量
     gdrSupportMatrix[comm->cudaDev] = 0;
-    for (int dev=0; dev<netDevs; dev++) {
+    for (int dev=0; dev<netDevs; dev++) {           // 迭代每一个网络设备
       // Find a net device which is GDR-capable
       ncclNetProperties_t props;
       NCCLCHECK(comm->ncclNet->getProperties(dev, &props));
       if ((props.ptrSupport & NCCL_PTR_CUDA) == 0) continue;
 
-    // Allocate memory on the GPU and try to register it on the NIC.
-    void *lComm = NULL, *sComm = NULL, *rComm = NULL;
-    ncclNetHandle_t handle;
-    char* gpuPtr = NULL;
-    void* mHandle = NULL;
-    ncclResult_t ret;
-    ncclDebugNoWarn = NCCL_NET;
-    NCCLCHECKGOTO(comm->ncclNet->listen(dev, &handle, &lComm), ret, cleanup1);
+      // Allocate memory on the GPU and try to register it on the NIC.
+      void *lComm = NULL, *sComm = NULL, *rComm = NULL;
+      ncclNetHandle_t handle;
+      char* gpuPtr = NULL;
+      void* mHandle = NULL;
+      ncclResult_t ret;
+      ncclDebugNoWarn = NCCL_NET;
+      NCCLCHECKGOTO(comm->ncclNet->listen(dev, &handle, &lComm), ret, cleanup1);
 
-    bool connected;
-    connected = false;
-    while (!connected) {
+      bool connected;
+      connected = false;
+      while (!connected) {
 
-      // If we're aborting now, skip to cleanup
-      if (*comm->abortFlag) {
-        goto cleanup2;
+        // If we're aborting now, skip to cleanup
+        if (*comm->abortFlag) {
+          goto cleanup2;
+        }
+
+        if (sComm == NULL)
+          NCCLCHECKGOTO(comm->ncclNet->connect(dev, &handle, &sComm), ret, cleanup2);
+
+        if (rComm == NULL)
+          NCCLCHECKGOTO(comm->ncclNet->accept(lComm, &rComm), ret, cleanup2);
+
+        connected = (rComm != NULL) && (sComm != NULL);
+      } // while
+
+      NCCLCHECKGOTO(ncclCudaMalloc(&gpuPtr, GPU_BUF_SIZE), ret, cleanup2);
+      if (comm->ncclNet->regMr(sComm, gpuPtr, GPU_BUF_SIZE, NCCL_PTR_CUDA, &mHandle) == ncclSuccess) {
+        NCCLCHECK(comm->ncclNet->deregMr(sComm, mHandle));
+        NCCLCHECK(comm->ncclNet->regMr(rComm, gpuPtr, GPU_BUF_SIZE, NCCL_PTR_CUDA, &mHandle));
+        NCCLCHECK(comm->ncclNet->deregMr(rComm, mHandle));
+        gdrSupportMatrix[comm->cudaDev] = 1;
       }
-
-      if (sComm == NULL)
-        NCCLCHECKGOTO(comm->ncclNet->connect(dev, &handle, &sComm), ret, cleanup2);
-
-      if (rComm == NULL)
-        NCCLCHECKGOTO(comm->ncclNet->accept(lComm, &rComm), ret, cleanup2);
-
-      connected = (rComm != NULL) && (sComm != NULL);
-    }
-
-    NCCLCHECKGOTO(ncclCudaMalloc(&gpuPtr, GPU_BUF_SIZE), ret, cleanup2);
-    if (comm->ncclNet->regMr(sComm, gpuPtr, GPU_BUF_SIZE, NCCL_PTR_CUDA, &mHandle) == ncclSuccess) {
-      NCCLCHECK(comm->ncclNet->deregMr(sComm, mHandle));
-      NCCLCHECK(comm->ncclNet->regMr(rComm, gpuPtr, GPU_BUF_SIZE, NCCL_PTR_CUDA, &mHandle));
-      NCCLCHECK(comm->ncclNet->deregMr(rComm, mHandle));
-      gdrSupportMatrix[comm->cudaDev] = 1;
-    }
-    ncclDebugNoWarn = 0;
-    NCCLCHECK(ncclCudaFree(gpuPtr));
+      ncclDebugNoWarn = 0;
+      NCCLCHECK(ncclCudaFree(gpuPtr));
 cleanup2:
-    if (rComm != NULL)
-      NCCLCHECK(comm->ncclNet->closeRecv(rComm));
-    if (sComm != NULL)
-      NCCLCHECK(comm->ncclNet->closeSend(sComm));
-    NCCLCHECK(comm->ncclNet->closeListen(lComm));
+      if (rComm != NULL)
+        NCCLCHECK(comm->ncclNet->closeRecv(rComm));
+      if (sComm != NULL)
+        NCCLCHECK(comm->ncclNet->closeSend(sComm));
+      NCCLCHECK(comm->ncclNet->closeListen(lComm));
 cleanup1:
       break;
-    }
+    } // for
   }
   *gdrSupport = gdrSupportMatrix[comm->cudaDev];
   return ncclSuccess;

@@ -19,16 +19,17 @@
 #define BUSID_SIZE (sizeof("0000:00:00.0"))
 #define BUSID_REDUCED_SIZE (sizeof("0000:00"))
 
-const char* topoNodeTypeStr[] = { "GPU", "PCI", "NVS", "CPU", "NIC", "NET" };
-const char* topoLinkTypeStr[] = { "LOC", "NVL", "",    "PCI",    "",    "",    "", "SYS", "NET" };
-const char* topoPathTypeStr[] = { "LOC", "NVL", "NVB", "PIX", "PXB", "PXN", "PHB", "SYS", "DIS" };
+const char* topoNodeTypeStr[] = { "GPU", "PCI", "NVS", "CPU", "NIC", "NET" };                         // 图片节点类型： GPU, PCI, NVS (???), CPU, NIC, NET 
+const char* topoLinkTypeStr[] = { "LOC", "NVL", "",    "PCI",    "",    "",    "", "SYS", "NET" };    // 拓扑链路： LOC（???）、NVL、PCI、SYS、NET
+const char* topoPathTypeStr[] = { "LOC", "NVL", "NVB", "PIX", "PXB", "PXN", "PHB", "SYS", "DIS" };    // 图片路径：LOC（???）、NVL、NVB、PIX、PXB、PXN、PHB、SYS、DIS
 
 /******************************************************************/
 /******************* Graph Creation Functions *********************/
 /******************************************************************/
 
 // Get an int64 from a PCI path. For example, sys/class/pci0000:00/0000:00:02.0/0000:02:00.0/ will return 0x000002000.
-ncclResult_t pciPathToInt64(char* path, int offset, int minOffset, int64_t* id) {
+ncclResult_t pciPathToInt64(char* path, int offset, int minOffset, int64_t* id)
+{
   char* str = path+offset;
   // Remove trailing "/"
   if (*str == '/') str--;
@@ -87,28 +88,28 @@ enum ncclNvLinkDeviceType {
 
 ncclResult_t ncclTopoGetNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id) {
   for (int i=0; i<system->nodes[type].count; i++) {
-    if (system->nodes[type].nodes[i].id == id) {
-      *node = system->nodes[type].nodes+i;
+    if (system->nodes[type].nodes[i].id == id) { // 匹配
+      *node = system->nodes[type].nodes+i;       // 返回指针
       return ncclSuccess;
     }
   }
   return ncclSuccess;
 }
-
+// 创建某种type类型的node
 ncclResult_t ncclTopoCreateNode(struct ncclTopoSystem* system, struct ncclTopoNode** node, int type, uint64_t id) {
-  if (system->nodes[type].count == NCCL_TOPO_MAX_NODES) {
+  if (system->nodes[type].count == NCCL_TOPO_MAX_NODES) { // 超过了256个设备
     WARN("Error : tried to create too many nodes of type %d", type);
     return ncclInternalError;
   }
-  struct ncclTopoNode* n = system->nodes[type].nodes+system->nodes[type].count;
+  struct ncclTopoNode* n = system->nodes[type].nodes+system->nodes[type].count; // 当前类型设备的
   system->nodes[type].count++;
   n->type = type;
   n->id = id;
   if (type == GPU) {
     // Create link to itself (used in some corner cases)
-    n->nlinks=1;
+    n->nlinks=1;                        // 自己到自己是local连接
     n->links[0].type = LINK_LOC;
-    n->links[0].remNode = n;
+    n->links[0].remNode = n;            // 上行设备
     n->links[0].bw = LOC_BW;
     n->gpu.dev = NCCL_TOPO_UNDEF;
     n->gpu.rank = NCCL_TOPO_UNDEF;
@@ -128,23 +129,24 @@ ncclResult_t ncclTopoCreateNode(struct ncclTopoSystem* system, struct ncclTopoNo
 }
 
 ncclResult_t ncclTopoRemoveNode(struct ncclTopoSystem* system, int type, int index) {
-  struct ncclTopoNode* delNode = system->nodes[type].nodes+index;
-  for (int t=0; t<NCCL_TOPO_NODE_TYPES; t++) {
-    free(delNode->paths[t]);
-    for (int n=0; n<system->nodes[t].count; n++) {
+  struct ncclTopoNode* delNode = system->nodes[type].nodes+index;     // 当前分配的node, 待删除
+  for (int t=0; t<NCCL_TOPO_NODE_TYPES; t++) {  // 遍历所有设备类型
+    free(delNode->paths[t]);                    // 是否
+    for (int n=0; n<system->nodes[t].count; n++) { // 当前类型的设备数目
       struct ncclTopoNode* node = system->nodes[t].nodes+n;
       if (node == delNode) continue;
-      for (int l=0; l<node->nlinks; l++) {
-        while (l<node->nlinks && node->links[l].remNode == delNode) {
-          memmove(node->links+l, node->links+l+1, (node->nlinks-l-1)*sizeof(struct ncclTopoLink));
+      for (int l=0; l<node->nlinks; l++) {        // 遍历当前类的设备的每一条链路
+        while (l<node->nlinks && node->links[l].remNode == delNode) { // 如果指向了要删除的节点
+          memmove(node->links+l, node->links+l+1, (node->nlinks-l-1)*sizeof(struct ncclTopoLink)); // 删除当前Link
           node->nlinks--;
-        }
+        } // while
         if (l<node->nlinks && node->links[l].remNode->type == type && node->links[l].remNode >= delNode) {
           node->links[l].remNode--;
         }
-      }
+      } // for
     }
   }
+  // 整体前移拷贝，删除当前节点
   memmove(delNode, delNode+1, (system->nodes[type].count-index-1)*sizeof(struct ncclTopoNode));
   system->nodes[type].count--;
   return ncclSuccess;
@@ -287,7 +289,7 @@ ncclResult_t ncclTopoPrint(struct ncclTopoSystem* s) {
   NCCLCHECK(ncclTopoPrintPaths(s));
   return ncclSuccess;
 }
-
+// 拓扑排序各条链路
 static ncclResult_t ncclTopoSort(struct ncclTopoNode* node, struct ncclTopoNode* upNode) {
   // Shift all links to have upLink as last link
   if (upNode) {
@@ -560,7 +562,7 @@ ncclResult_t ncclTopoGetSystemFromXml(struct ncclXml* xml, struct ncclTopoSystem
 NCCL_PARAM(TopoDumpFileRank, "TOPO_DUMP_FILE_RANK", 0);
 
 // Only set values if not already set
-static ncclResult_t xmlInitAttrInt(struct ncclXmlNode* node, const char* attrName, const int value) {
+static ncclResult_t xmlInitAttrInt(struct ncclXmlNode* node, const char* attrName, const int value) { // 如果没有设置属性则设置
   int index;
   NCCLCHECK(xmlGetAttrIndex(node, attrName, &index));
   if (index == -1) {
@@ -598,33 +600,34 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
   char* xmlTopoFile = getenv("NCCL_TOPO_FILE");
   if (xmlTopoFile) {
     INFO(NCCL_ENV, "NCCL_TOPO_FILE set by environment to %s", xmlTopoFile);
-    NCCLCHECK(ncclTopoGetXmlFromFile(xmlTopoFile, xml, 1));
+    NCCLCHECK(ncclTopoGetXmlFromFile(xmlTopoFile, xml, 1));                           // 从用户定义的xml文件中加载 设备拓扑信息
   } else {
     // Try default XML topology location
-    NCCLCHECK(ncclTopoGetXmlFromFile("/var/run/nvidia-topologyd/virtualTopology.xml", xml, 0));
+    NCCLCHECK(ncclTopoGetXmlFromFile("/var/run/nvidia-topologyd/virtualTopology.xml", xml, 0)); // 或者从默认路径加载
   }
   if (xml->maxIndex == 0) {
     // Create top tag
     struct ncclXmlNode* top;
-    NCCLCHECK(xmlAddNode(xml, NULL, "system", &top));
-    NCCLCHECK(xmlSetAttrInt(top, "version", NCCL_TOPO_XML_VERSION));
+    NCCLCHECK(xmlAddNode(xml, NULL, "system", &top));                 // 分配并添加system节点
+    NCCLCHECK(xmlSetAttrInt(top, "version", NCCL_TOPO_XML_VERSION));  // system节点设置version 属性 version:1
   }
 
   // Auto-detect GPUs if needed
-  for (int r=0; r<comm->nRanks; r++) {
-    if (comm->peerInfo[r].hostHash == comm->peerInfo[comm->rank].hostHash) {
-      char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
-      NCCLCHECK(int64ToBusId(comm->peerInfo[r].busId, busId));
+  for (int r=0; r<comm->nRanks; r++) {    // 探测所有的GPU
+    if (comm->peerInfo[r].hostHash == comm->peerInfo[comm->rank].hostHash) { // rank位于当前节点上
+      char busId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE]; // 16
+      NCCLCHECK(int64ToBusId(comm->peerInfo[r].busId, busId));               // 
       struct ncclXmlNode* node;
-      NCCLCHECK(ncclTopoFillGpu(xml, busId, &node));
+      NCCLCHECK(ncclTopoFillGpu(xml, busId, &node));                         // 2) 添加GPU节点到xml上
       if (node == NULL) continue;
-      NCCLCHECK(xmlSetAttrInt(node, "keep", 1));
+      NCCLCHECK(xmlSetAttrInt(node, "keep", 1));                             // 设置GPU节点的属性
       NCCLCHECK(xmlSetAttrInt(node, "rank", r));
       NCCLCHECK(xmlInitAttrInt(node, "gdr", comm->peerInfo[r].gdrSupport));
     }
-  }
+  } // for
   // Auto-detect NICs if needed. net/collnet share the same xml/graph nodes,
   // so we start with collnet so that it has precedence.
+  // 自动探测网卡
   int netDevCount = 0;
   if (collNetSupport(comm)) {
     NCCLCHECK(collNetDevices(comm, &netDevCount));
@@ -669,7 +672,7 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
   NCCLCHECK(ncclTopoTrimXml(xml));
 
   xmlTopoFile = getenv("NCCL_TOPO_DUMP_FILE");
-  if (xmlTopoFile && comm->rank == ncclParamTopoDumpFileRank()) {
+  if (xmlTopoFile && comm->rank == ncclParamTopoDumpFileRank()) {                   // 用户设置的dumpxml的文件
     INFO(NCCL_ENV, "NCCL_TOPO_DUMP_FILE set by environment to %s", xmlTopoFile);
     NCCLCHECK(ncclTopoDumpXmlToFile(xmlTopoFile, xml));
   }
@@ -679,13 +682,14 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
   return ncclSuccess;
 }
 
-static ncclResult_t getLocalNetMask(struct ncclTopoSystem* system, int g, uint64_t* localNetMask, int* type) {
+static ncclResult_t getLocalNetMask(struct ncclTopoSystem* system, int g, uint64_t* localNetMask, int* type)
+{
   int minType = PATH_DIS;
   float maxBw = 0;
   int count = 0;
   int* nets;
-  NCCLCHECK(ncclCalloc(&nets, system->nodes[NET].count));
-  for (int n=0; n<system->nodes[NET].count; n++) {
+  NCCLCHECK(ncclCalloc(&nets, system->nodes[NET].count)); // 网卡数量
+  for (int n=0; n<system->nodes[NET].count; n++) { // 遍历每一张网卡
     struct ncclTopoLinkList* path = system->nodes[NET].nodes[n].paths[GPU]+g;
     if (path->bw > maxBw || (path->bw == maxBw && path->type < minType)) {
       maxBw = path->bw;
@@ -747,7 +751,7 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int ch
   }
 }
 
-ncclResult_t ncclTopoGetLocalGpu(struct ncclTopoSystem* system, int net, int* gpuIndex) {
+ncclResult_t ncclTopoGetLocalGpu(struct ncclTopoSystem* system, int net, int* gpuIndex) { // 
   int ngpus = system->nodes[GPU].count;
   int* gpus;
   NCCLCHECK(ncclCalloc(&gpus, ngpus));
@@ -755,7 +759,7 @@ ncclResult_t ncclTopoGetLocalGpu(struct ncclTopoSystem* system, int net, int* gp
   // Find localNetMask which includes net with the most local GPUs.
   int netLocalGpus = 0, minType = PATH_DIS;
   uint64_t localNetMask = 0ULL;
-  for (int g=0; g<ngpus; g++) {
+  for (int g=0; g<ngpus; g++) { // 遍历所有GPU
     int type = PATH_DIS;
     uint64_t mask;
     NCCLCHECK(getLocalNetMask(system, g, &mask, &type));
@@ -805,7 +809,7 @@ ncclResult_t ncclTopoGetLocalGpu(struct ncclTopoSystem* system, int net, int* gp
 /* External query functions */
 /****************************/
 
-ncclResult_t ncclTopoCpuType(struct ncclTopoSystem* system, int* arch, int* vendor, int* model) {
+ncclResult_t ncclTopoCpuType(struct ncclTopoSystem* system, int* arch, int* vendor, int* model) { // 查询CPU类型
   *arch = system->nodes[CPU].nodes[0].cpu.arch;
   *vendor = system->nodes[CPU].nodes[0].cpu.vendor;
   *model = system->nodes[CPU].nodes[0].cpu.model;
@@ -813,15 +817,15 @@ ncclResult_t ncclTopoCpuType(struct ncclTopoSystem* system, int* arch, int* vend
 }
 
 NCCL_PARAM(IgnoreCpuAffinity, "IGNORE_CPU_AFFINITY", 0);
-
+// CPU 亲和性
 ncclResult_t ncclTopoGetCpuAffinity(struct ncclTopoSystem* system, int rank, cpu_set_t* affinity) {
   struct ncclTopoNode* cpu = NULL, *gpu = NULL;
-  for (int g=0; g<system->nodes[GPU].count; g++) {
-    if (system->nodes[GPU].nodes[g].gpu.rank == rank) {
-      gpu = system->nodes[GPU].nodes+g;
+  for (int g=0; g<system->nodes[GPU].count; g++) {  // 遍历所有的GPU设备
+    if (system->nodes[GPU].nodes[g].gpu.rank == rank) { // 匹配local rank的GPU
+      gpu = system->nodes[GPU].nodes+g; // 定位该GPU
       // Find closer CPU
       int cpuIndex = -1, minHops = 0;
-      for (int c=0; c<system->nodes[CPU].count; c++) {
+      for (int c=0; c<system->nodes[CPU].count; c++) {  // 遍历所有的CPU设备（实际是numa）
         int nHops = system->nodes[GPU].nodes[g].paths[CPU][c].count;
         if (cpuIndex == -1 || nHops < minHops) {
           cpuIndex = c;
@@ -878,17 +882,17 @@ ncclResult_t ncclTopoGetCpuAffinity(struct ncclTopoSystem* system, int rank, cpu
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoGetGpuCount(struct ncclTopoSystem* system, int* count) {
+ncclResult_t ncclTopoGetGpuCount(struct ncclTopoSystem* system, int* count) { // GPU数量
   *count = system->nodes[GPU].count;
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoGetNetCount(struct ncclTopoSystem* system, int* count) {
+ncclResult_t ncclTopoGetNetCount(struct ncclTopoSystem* system, int* count) { // 网卡数量
   *count = system->nodes[NET].count;
   return ncclSuccess;
 }
 
-ncclResult_t ncclTopoGetNvsCount(struct ncclTopoSystem* system, int* count) {
+ncclResult_t ncclTopoGetNvsCount(struct ncclTopoSystem* system, int* count) { // nvswitch的数量
   *count = system->nodes[NVS].count;
   return ncclSuccess;
 }
@@ -909,7 +913,7 @@ ncclResult_t ncclTopoGetCompCap(struct ncclTopoSystem* system, int* ccMin, int* 
 ncclResult_t ncclTopoGetLocalRank(struct ncclTopoSystem* system, int rank, int* localRank) {
   for (int g=0; g<system->nodes[GPU].count; g++) {
     if (system->nodes[GPU].nodes[g].gpu.rank == rank) {
-      *localRank = g;
+      *localRank = g;                                     // localrank直接使用GPU编号
       return ncclSuccess;
     }
   }

@@ -84,16 +84,16 @@ NCCL_PARAM(IbPciRelaxedOrdering, "IB_PCI_RELAXED_ORDERING", 2);
 NCCL_PARAM(IbAdaptiveRouting, "IB_ADAPTIVE_ROUTING", -2);
 
 pthread_t ncclIbAsyncThread;
-static void* ncclIbAsyncThreadMain(void* args) {
+static void* ncclIbAsyncThreadMain(void* args) { // 
   struct ibv_context* context = (struct ibv_context*)args;
   while (1) {
     struct ibv_async_event event;
-    if (ncclSuccess != wrap_ibv_get_async_event(context, &event)) { break; }
+    if (ncclSuccess != wrap_ibv_get_async_event(context, &event)) { break; }    // 阻塞等待 该设备上的异步事件
     char *str;
     if (ncclSuccess != wrap_ibv_event_type_str(&str, event.event_type)) { break; }
     if (event.event_type != IBV_EVENT_COMM_EST)
       WARN("NET/IB : Got async event : %s", str);
-    if (ncclSuccess != wrap_ibv_ack_async_event(&event)) { break; }
+    if (ncclSuccess != wrap_ibv_ack_async_event(&event)) { break; }             // ack异步事件
   }
   return NULL;
 }
@@ -156,17 +156,17 @@ static int ncclIbRelaxedOrderingCapable(void) {
   return r == ncclInternalError ? 0 : 1;
 }
 
-ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
+ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) { // IB 网络初始化
   if (ncclParamIbDisable()) return ncclInternalError;
   static int shownIbHcaEnv = 0;
-  if(wrap_ibv_symbols() != ncclSuccess) { return ncclInternalError; }
+  if(wrap_ibv_symbols() != ncclSuccess) { return ncclInternalError; } // libibverbs.so 加载符号
 
   if (ncclNIbDevs == -1) {
-    pthread_mutex_lock(&ncclIbLock);
-    wrap_ibv_fork_init();
+    pthread_mutex_lock(&ncclIbLock);    // 唯一初始化
+    wrap_ibv_fork_init();               // fork init
     if (ncclNIbDevs == -1) {
       ncclNIbDevs = 0;
-      if (ncclFindInterfaces(ncclIbIfName, &ncclIbIfAddr, MAX_IF_NAME_SIZE, 1) != 1) {
+      if (ncclFindInterfaces(ncclIbIfName, &ncclIbIfAddr, MAX_IF_NAME_SIZE, 1) != 1) { // 查找一个 网络 设备，在用户不设置NCCL_SOCKET_IFNAME时，优先能查找到IB设备
         WARN("NET/IB : No IP interface found.");
         return ncclInternalError;
       }
@@ -176,7 +176,7 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
       struct ibv_device** devices;
 
       // Check if user defined which IB device:port to use
-      char* userIbEnv = getenv("NCCL_IB_HCA");
+      char* userIbEnv = getenv("NCCL_IB_HCA"); // device:port 格式
       if (userIbEnv != NULL && shownIbHcaEnv++ == 0) INFO(NCCL_NET|NCCL_ENV, "NCCL_IB_HCA set to %s", userIbEnv);
       struct netIf userIfs[MAX_IB_DEVS];
       bool searchNot = userIbEnv && userIbEnv[0] == '^';
@@ -185,11 +185,11 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
       if (searchExact) userIbEnv++;
       int nUserIfs = parseStringList(userIbEnv, userIfs, MAX_IB_DEVS);
 
-      if (ncclSuccess != wrap_ibv_get_device_list(&devices, &nIbDevs)) return ncclInternalError;
+      if (ncclSuccess != wrap_ibv_get_device_list(&devices, &nIbDevs)) return ncclInternalError; // 查找所有的rdma设备
 
       for (int d=0; d<nIbDevs && ncclNIbDevs<MAX_IB_DEVS; d++) {
         struct ibv_context * context;
-        if (ncclSuccess != wrap_ibv_open_device(&context, devices[d]) || context == NULL) {
+        if (ncclSuccess != wrap_ibv_open_device(&context, devices[d]) || context == NULL) { // 打开某个 rdma设备
           WARN("NET/IB : Unable to open device %s", devices[d]->name);
           continue;
         }
@@ -212,23 +212,25 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
               && portAttr.link_layer != IBV_LINK_LAYER_ETHERNET) continue;
 
           // check against user specified HCAs/ports
-          if (! (matchIfList(devices[d]->name, port, userIfs, nUserIfs, searchExact) ^ searchNot)) {
+          if (! (matchIfList(devices[d]->name, port, userIfs, nUserIfs, searchExact) ^ searchNot)) { // 如果不匹配用户要求的HCA卡和端口，继续下一个迭代
+            // TODO: 忘记关闭设备
             continue;
           }
           TRACE(NCCL_INIT|NCCL_NET,"NET/IB: [%d] %s:%d/%s ", d, devices[d]->name, port,
               portAttr.link_layer == IBV_LINK_LAYER_INFINIBAND ? "IB" : "RoCE");
           pthread_mutex_init(&ncclIbDevs[ncclNIbDevs].lock, NULL);
-          ncclIbDevs[ncclNIbDevs].device = d;
-          ncclIbDevs[ncclNIbDevs].guid = devAttr.sys_image_guid;
-          ncclIbDevs[ncclNIbDevs].port = port;
-          ncclIbDevs[ncclNIbDevs].link = portAttr.link_layer;
-          ncclIbDevs[ncclNIbDevs].speed = ncclIbSpeed(portAttr.active_speed) * ncclIbWidth(portAttr.active_width);
-          ncclIbDevs[ncclNIbDevs].context = context;
+          // 记录匹配的设备的rdma卡的各类信息
+          ncclIbDevs[ncclNIbDevs].device = d;                   // 设备编号
+          ncclIbDevs[ncclNIbDevs].guid = devAttr.sys_image_guid;// GUID
+          ncclIbDevs[ncclNIbDevs].port = port;                  // 端口
+          ncclIbDevs[ncclNIbDevs].link = portAttr.link_layer;   // 链路层层协议
+          ncclIbDevs[ncclNIbDevs].speed = ncclIbSpeed(portAttr.active_speed) * ncclIbWidth(portAttr.active_width);  // 设备带宽
+          ncclIbDevs[ncclNIbDevs].context = context;            // 已经打开设备的句柄
           ncclIbDevs[ncclNIbDevs].pdRefs = 0;
           ncclIbDevs[ncclNIbDevs].pd = NULL;
-          strncpy(ncclIbDevs[ncclNIbDevs].devName, devices[d]->name, MAXNAMESIZE);
-          NCCLCHECK(ncclIbGetPciPath(ncclIbDevs[ncclNIbDevs].devName, &ncclIbDevs[ncclNIbDevs].pciPath, &ncclIbDevs[ncclNIbDevs].realPort));
-          ncclIbDevs[ncclNIbDevs].maxQp = devAttr.max_qp;
+          strncpy(ncclIbDevs[ncclNIbDevs].devName, devices[d]->name, MAXNAMESIZE);    // 设备名
+          NCCLCHECK(ncclIbGetPciPath(ncclIbDevs[ncclNIbDevs].devName, &ncclIbDevs[ncclNIbDevs].pciPath, &ncclIbDevs[ncclNIbDevs].realPort)); // 设备的PCI编号
+          ncclIbDevs[ncclNIbDevs].maxQp = devAttr.max_qp;       // 最大PS数目
           ncclIbDevs[ncclNIbDevs].mrCache.capacity = 0;
           ncclIbDevs[ncclNIbDevs].mrCache.population = 0;
           ncclIbDevs[ncclNIbDevs].mrCache.slots = NULL;
@@ -237,13 +239,13 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
           // But allow it to be overloaded by an env parameter
           ncclIbDevs[ncclNIbDevs].ar = (portAttr.link_layer == IBV_LINK_LAYER_INFINIBAND) ? 1 : 0;
           if (ncclParamIbAdaptiveRouting() != -2) ncclIbDevs[ncclNIbDevs].ar = ncclParamIbAdaptiveRouting();
-
+          // 为每一个IB设备启动一个异步线程，执行
           pthread_create(&ncclIbAsyncThread, NULL, ncclIbAsyncThreadMain, context);
           ncclSetThreadName(ncclIbAsyncThread, "NCCL IbAsync %2d", ncclNIbDevs);
           pthread_detach(ncclIbAsyncThread); // will not be pthread_join()'d
           ncclNIbDevs++;
           nPorts++;
-        }
+        } // for
         if (nPorts == 0 && ncclSuccess != wrap_ibv_close_device(context)) { return ncclInternalError; }
       }
       if (nIbDevs && (ncclSuccess != wrap_ibv_free_device_list(devices))) { return ncclInternalError; };

@@ -144,12 +144,12 @@ static void *bootstrapRoot(void* rargs) { // bootstrap root的线程: 等待一�
   TRACE(NCCL_INIT, "COLLECTED ALL %d HANDLES", nranks);
 
   // Send the connect handle for the next rank in the AllGather ring
-  for (int r=0; r<nranks; ++r) { // 从rank0 发送
-    int next = (r+1) % nranks;  // 每个rank， 给环上的其他rank发送消息
+  for (int r=0; r<nranks; ++r) { // 
+    int next = (r+1) % nranks;   // 从rank0上，每个rank{i}， 通过bootstrap网络，发送rank{i + 1}的数据地址
     struct ncclSocket sock;
-    NCCLCHECKGOTO(ncclSocketInit(&sock, rankAddressesRoot+r, magic, ncclSocketTypeBootstrap), res, out);    // 初始化 peer rank的bootstrap网络
-    NCCLCHECKGOTO(ncclSocketConnect(&sock), res, out);                                                      // 连接 peer rank的bootstrap网络
-    NCCLCHECKGOTO(bootstrapNetSend(&sock, rankAddresses+next, sizeof(union ncclSocketAddress)), res, out);  // 发送
+    NCCLCHECKGOTO(ncclSocketInit(&sock, rankAddressesRoot+r, magic, ncclSocketTypeBootstrap), res, out);
+    NCCLCHECKGOTO(ncclSocketConnect(&sock), res, out);                                               
+    NCCLCHECKGOTO(bootstrapNetSend(&sock, rankAddresses+next, sizeof(union ncclSocketAddress)), res, out);
     NCCLCHECKGOTO(ncclSocketClose(&sock), res, out);
   }
   TRACE(NCCL_INIT, "SENT OUT ALL %d HANDLES", nranks);
@@ -194,11 +194,11 @@ ncclResult_t bootstrapGetUniqueId(struct ncclBootstrapHandle* handle) { //
   char* env = getenv("NCCL_COMM_ID");       // 环境变量设置的NCCL_COMM_ID
   if (env) {
     INFO(NCCL_ENV, "NCCL_COMM_ID set by environment to %s", env);
-    if (ncclSocketGetAddrFromString(&handle->addr, env) != ncclSuccess) {
+    if (ncclSocketGetAddrFromString(&handle->addr, env) != ncclSuccess) { // 延迟bootstrap网络的创建
       WARN("Invalid NCCL_COMM_ID, please use format: <ipv4>:<port> or [<ipv6>]:<port> or <hostname>:<port>");
       return ncclInvalidArgument;
     }
-  } else { // 当前是rank0
+  } else {
     memcpy(&handle->addr, &bootstrapNetIfAddr, sizeof(union ncclSocketAddress));  // 与bootstrap使用相同的地址
     NCCLCHECK(bootstrapCreateRoot(handle, false));
   }
@@ -214,9 +214,9 @@ struct unexConn {
 };
 
 struct bootstrapState {
-  struct ncclSocket listenSock;
-  struct ncclSocket ringRecvSocket;
-  struct ncclSocket ringSendSocket;
+  struct ncclSocket listenSock;               // 当前监听网络
+  struct ncclSocket ringRecvSocket;           // 被动连接到ring中上家的网络
+  struct ncclSocket ringSendSocket;           // 主动连接到ring中的下家的网络
   union ncclSocketAddress* peerCommAddresses;
   union ncclSocketAddress* peerProxyAddresses;
   struct unexConn* unexpectedConnections;
@@ -248,17 +248,19 @@ ncclResult_t bootstrapInit(struct ncclBootstrapHandle* handle, struct ncclComm* 
   info.rank = rank;
   info.nranks = nranks;
   // Create socket for other ranks to contact me
+  // 创建一个数据网络：用来接收来自rank 
   NCCLCHECK(ncclSocketInit(&state->listenSock, &bootstrapNetIfAddr, comm->magic, ncclSocketTypeBootstrap, comm->abortFlag));
   NCCLCHECK(ncclSocketListen(&state->listenSock));
   NCCLCHECK(ncclSocketGetAddr(&state->listenSock, &info.extAddressListen));
 
   // Create socket for root to contact me
+  // 主线程创建一个bootstrap网络的监听地址：用来接收来自rank0 bootstrap网络发送过来的消息
   NCCLCHECK(ncclSocketInit(&listenSockRoot, &bootstrapNetIfAddr, comm->magic, ncclSocketTypeBootstrap, comm->abortFlag));
   NCCLCHECK(ncclSocketListen(&listenSockRoot));
   NCCLCHECK(ncclSocketGetAddr(&listenSockRoot, &info.extAddressListenRoot));
 
   // stagger connection times to avoid an overload of the root
-  if (nranks > 128) {
+  if (nranks > 128) { // 根据自己的rank，分别延时 rank ms，防止 rank0上的网络处理并发连接失败
     long msec = rank;
     struct timespec tv;
     tv.tv_sec = msec / 1000;
@@ -269,26 +271,31 @@ ncclResult_t bootstrapInit(struct ncclBootstrapHandle* handle, struct ncclComm* 
 
   // send info on my listening socket to root
   NCCLCHECK(ncclSocketInit(&sock, &handle->addr, comm->magic, ncclSocketTypeBootstrap, comm->abortFlag));
-  NCCLCHECK(ncclSocketConnect(&sock));
-  NCCLCHECK(bootstrapNetSend(&sock, &info, sizeof(info)));
+  NCCLCHECK(ncclSocketConnect(&sock));                        // 连接到 rank0的bootstrap网络
+  NCCLCHECK(bootstrapNetSend(&sock, &info, sizeof(info)));    // 发送自己的bootstrap网络和数据网络地址到rank0
   NCCLCHECK(ncclSocketClose(&sock));
 
   // get info on my "next" rank in the bootstrap ring from root
+  // 从 rank0 接收 ring上 下一个 rank的 数据网络地址
   NCCLCHECK(ncclSocketInit(&sock));
   NCCLCHECK(ncclSocketAccept(&sock, &listenSockRoot));
   NCCLCHECK(bootstrapNetRecv(&sock, &nextAddr, sizeof(union ncclSocketAddress)));
   NCCLCHECK(ncclSocketClose(&sock));
   NCCLCHECK(ncclSocketClose(&listenSockRoot));
-
+  // 连接到下一个rank的数据网络
   NCCLCHECK(ncclSocketInit(&state->ringSendSocket, &nextAddr, comm->magic, ncclSocketTypeBootstrap, comm->abortFlag));
   NCCLCHECK(ncclSocketConnect(&state->ringSendSocket));
   // Accept the connect request from the previous rank in the AllGather ring
+  // 初始化数据网络，并等待ring的上一家进行连接
   NCCLCHECK(ncclSocketInit(&state->ringRecvSocket));
   NCCLCHECK(ncclSocketAccept(&state->ringRecvSocket, &state->listenSock));
 
   // AllGather all listen handlers
+  // allgather 所有rank的地址
   NCCLCHECK(ncclCalloc(&state->peerCommAddresses, nranks));
+  // 填充自己数据网络的地址
   NCCLCHECK(ncclSocketGetAddr(&state->listenSock, state->peerCommAddresses+rank));
+  // allgather所有rank的数据面网络地址
   NCCLCHECK(bootstrapAllGather(state, state->peerCommAddresses, sizeof(union ncclSocketAddress)));
 
   // Create the service proxy

@@ -200,7 +200,7 @@ struct ncclComm {
   int* topParentLocalRanks;
   struct ncclChannel channels[MAXCHANNELS];
   struct ncclPeerInfo* peerInfo;
-  struct ncclTopoSystem* topo;
+  struct ncclTopoSystem* topo;                    // ???
 
   ncclNet_t* ncclNet;
   ncclCollNet_t* ncclCollNet;

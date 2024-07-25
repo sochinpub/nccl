@@ -12,6 +12,7 @@
 #include "channel.h"
 
 // Pre-compute GPU->NIC, GPU->GPU and NIC->GPU paths
+// 预先计算的GPU 到网卡、GPU到GPU、网卡到GPU的路径
 
 struct ncclTopoNodeList {
   struct ncclTopoNode* list[NCCL_TOPO_MAX_NODES];

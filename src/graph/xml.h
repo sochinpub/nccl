@@ -25,19 +25,19 @@
 
 struct ncclXmlNode {
   char name[MAX_STR_LEN+1];
-  struct {
+  struct {                      // 最大支持16个属性
     char key[MAX_STR_LEN+1];
     char value[MAX_STR_LEN+1];
   } attrs[MAX_ATTR_COUNT+1]; // Need an extra one to consume extra params
   int nAttrs;
   int type;
-  struct ncclXmlNode* parent;
-  struct ncclXmlNode* subs[MAX_SUBS];
+  struct ncclXmlNode* parent;               // 父亲
+  struct ncclXmlNode* subs[MAX_SUBS];       // 儿子（最大32）
   int nSubs;
 };
 
 struct ncclXml {
-  struct ncclXmlNode nodes[MAX_NODES];
+  struct ncclXmlNode nodes[MAX_NODES];  // 支持1024个 节点
   int maxIndex;
 };
 
@@ -122,13 +122,14 @@ static ncclResult_t xmlFindTag(struct ncclXml* xml, const char* tagName, struct 
 }
 
 static ncclResult_t xmlFindTagKv(struct ncclXml* xml, const char* tagName, struct ncclXmlNode** node, const char* attrName, const char* attrValue) {
+  // 查找是否存在 tagName， 且attrName=attrValue的节点
   *node = NULL;
-  for (int i=0; i<xml->maxIndex; i++) {
+  for (int i=0; i<xml->maxIndex; i++) { // 直接变量所有xml节点
     struct ncclXmlNode* n = xml->nodes+i;
-    if (strcmp(n->name, tagName) == 0) {
+    if (strcmp(n->name, tagName) == 0) { // 名字匹配
       const char* value;
       NCCLCHECK(xmlGetAttr(n, attrName, &value));
-      if (value && strcmp(value, attrValue) == 0) {
+      if (value && strcmp(value, attrValue) == 0) { // 匹配属性
         *node = n;
         return ncclSuccess;
       }
@@ -162,15 +163,15 @@ static ncclResult_t xmlSetAttrIfUnset(struct ncclXmlNode* node, const char* attr
   return ncclSuccess;
 }
 
-static ncclResult_t xmlSetAttrInt(struct ncclXmlNode* node, const char* attrName, const int value) {
+static ncclResult_t xmlSetAttrInt(struct ncclXmlNode* node, const char* attrName, const int value) { // 给node节点添加属性
   int index;
-  NCCLCHECK(xmlGetAttrIndex(node, attrName, &index));
+  NCCLCHECK(xmlGetAttrIndex(node, attrName, &index));   // 查找属性
   if (index == -1) {
-    index = node->nAttrs++;
+    index = node->nAttrs++;                             // 
     strncpy(node->attrs[index].key, attrName, MAX_STR_LEN);
     node->attrs[index].key[MAX_STR_LEN] = '\0';
   }
-  snprintf(node->attrs[index].value, MAX_STR_LEN, "%d", value);
+  snprintf(node->attrs[index].value, MAX_STR_LEN, "%d", value); // 设置属性值
   node->attrs[index].value[MAX_STR_LEN] = '\0';
   return ncclSuccess;
 }
@@ -200,7 +201,7 @@ static ncclResult_t xmlUnsetAttr(struct ncclXmlNode* node, const char* attrName)
   return ncclSuccess;
 }
 
-static ncclResult_t xmlGetSub(struct ncclXmlNode* node, const char* subName, struct ncclXmlNode** sub) {
+static ncclResult_t xmlGetSub(struct ncclXmlNode* node, const char* subName, struct ncclXmlNode** sub) { // 查找子节点
   *sub = NULL;
   for (int s=0; s<node->nSubs; s++) {
     if (strcmp(node->subs[s]->name, subName) == 0) {
@@ -233,19 +234,20 @@ static ncclResult_t xmlGetSubKvInt(struct ncclXmlNode* node, const char* subName
   return ncclSuccess;
 }
 
-static ncclResult_t xmlAddNode(struct ncclXml* xml, struct ncclXmlNode* parent, const char* subName, struct ncclXmlNode** sub) {
+static ncclResult_t xmlAddNode(struct ncclXml* xml, struct ncclXmlNode* parent, const char* subName, struct ncclXmlNode** sub) { // 创建并添加子节点
+  // 
   if (xml->maxIndex == MAX_NODES) {
     WARN("Error : too many XML nodes (max %d)", MAX_NODES);
     return ncclInternalError;
   }
-  struct ncclXmlNode* s = xml->nodes+xml->maxIndex++;
-  s->nSubs = 0;
-  s->nAttrs = 0;
-  *sub = s;
+  struct ncclXmlNode* s = xml->nodes+xml->maxIndex++;     // 分配一个节点
+  s->nSubs = 0;       // 无儿子
+  s->nAttrs = 0;      // 无属性
+  *sub = s;           // 返回
   s->parent = parent;
-  if (parent) parent->subs[parent->nSubs++] = s;
-  strncpy(s->name, subName, MAX_STR_LEN);
-  s->name[MAX_STR_LEN] = '\0';
+  if (parent) parent->subs[parent->nSubs++] = s;    // 挂链给父亲，作为儿子
+  strncpy(s->name, subName, MAX_STR_LEN);           // 当前节点的命名
+  s->name[MAX_STR_LEN] = '\0';                      // 
   return ncclSuccess;
 }
 
